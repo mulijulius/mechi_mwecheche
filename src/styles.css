@@ -1,0 +1,95 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Arena base palette */
+  --color-arena-bg: #0e0f12;
+  --color-arena-surface: #16181d;
+  --color-arena-surface-2: #1c1f26;
+  --color-arena-border: #282c34;
+  --color-arena-text: #ededef;
+  --color-arena-text-dim: #9a9ea8;
+
+  /* Stakes & status accents */
+  --color-arena-gold: #e8c547;
+  --color-arena-gold-dim: #8a7227;
+  --color-arena-emerald: #1fae6b;
+  --color-arena-emerald-dim: #134f33;
+  --color-arena-red: #e5484d;
+  --color-arena-red-dim: #5c2024;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-arena-bg);
+  color: var(--color-arena-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: var(--color-arena-gold);
+  color: #0e0f12;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Tabular numerals for stake/balance figures */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible keyboard focus ring across the app */
+:focus-visible {
+  outline: 2px solid var(--color-arena-gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Minimal enter/exit animation for Radix overlays (Dialog, etc.) */
+@keyframes arena-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes arena-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes arena-zoom-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+[data-slot='dialog-overlay'][data-state='open'] {
+  animation: arena-fade-in 150ms ease-out;
+}
+[data-slot='dialog-overlay'][data-state='closed'] {
+  animation: arena-fade-out 150ms ease-in;
+}
+[data-slot='dialog-content'][data-state='open'] {
+  animation: arena-zoom-in 150ms ease-out;
+}
+
