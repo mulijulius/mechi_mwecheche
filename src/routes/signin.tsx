@@ -71,9 +71,9 @@ function SignInPage() {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <a href="#" className="text-xs text-arena-text-dim hover:text-arena-gold">
+            <Link to="/forgot-password" className="text-xs text-arena-text-dim hover:text-arena-gold">
               Forgot password?
-            </a>
+            </Link>
           </div>
           <Input
             id="password"
