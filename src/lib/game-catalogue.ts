@@ -9,6 +9,7 @@ export interface GameMeta {
   minStakeKes: number
   accentVar: '--color-arena-gold' | '--color-arena-emerald' | '--color-arena-red'
   glyph: string
+  image: string
 }
 
 export const GAME_CATALOGUE: Array<GameMeta> = [
@@ -21,6 +22,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     minStakeKes: 50,
     accentVar: '--color-arena-gold',
     glyph: '⚃',
+    image: '/games/1000080272.jpg',
   },
   {
     slug: 'checkers',
@@ -31,6 +33,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     minStakeKes: 100,
     accentVar: '--color-arena-emerald',
     glyph: '⛀',
+    image: '/games/1000080271.jpg',
   },
   {
     slug: 'chess',
@@ -41,6 +44,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     minStakeKes: 200,
     accentVar: '--color-arena-gold',
     glyph: '♞',
+    image: '/games/1000080270.jpg',
   },
   {
     slug: 'billiards',
@@ -51,6 +55,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     minStakeKes: 150,
     accentVar: '--color-arena-red',
     glyph: '●',
+    image: '/games/1000080273.png',
   },
   {
     slug: 'solitaire',
@@ -61,5 +66,6 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     minStakeKes: 50,
     accentVar: '--color-arena-emerald',
     glyph: '♠',
+    image: '/games/1000080274.png',
   },
 ]
