@@ -1,4 +1,4 @@
-// Generated to match supabase/migrations/0001_init.sql
+// Generated to match supabase/migrations/0001_init.sql and 0002_security_questions.sql
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
 
 export type GameSlug = 'ludo' | 'checkers' | 'chess' | 'billiards' | 'solitaire'
@@ -278,8 +278,56 @@ export interface Database {
           },
         ]
       }
+      security_questions: {
+        Row: {
+          id: string
+          user_id: string
+          question_text: string
+          answer_hash: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          question_text: string
+          answer_hash: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          question_text?: string
+          answer_hash?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'security_questions_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      hash_security_answer: {
+        Args: { answer: string }
+        Returns: string
+      }
+      get_security_question: {
+        Args: { p_email: string }
+        Returns: string | null
+      }
+      verify_security_answer: {
+        Args: { p_email: string; p_answer: string }
+        Returns: boolean
+      }
+    }
   }
 }
