@@ -83,24 +83,37 @@ function Home() {
             {GAME_CATALOGUE.map((game) => (
               <div
                 key={game.slug}
-                className="rounded-xl border border-arena-border bg-arena-surface p-4 text-center transition-colors hover:border-[var(--accent)]"
+                className="group overflow-hidden rounded-xl border border-arena-border bg-arena-surface transition-colors hover:border-[var(--accent)]"
                 style={{ '--accent': `var(${game.accentVar})` } as React.CSSProperties}
               >
-                <div
-                  className="mx-auto mb-3 flex size-12 items-center justify-center rounded-lg text-xl"
-                  style={{
-                    backgroundColor: `color-mix(in srgb, var(${game.accentVar}) 12%, transparent)`,
-                    color: `var(${game.accentVar})`,
-                  }}
-                >
-                  {game.glyph}
+                {/* Game image */}
+                <div className="relative h-32 w-full overflow-hidden bg-arena-surface">
+                  <img
+                    src={game.image}
+                    alt={game.name}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                 </div>
-                <p className="font-display text-sm font-semibold text-arena-text">
-                  {game.name}
-                </p>
-                <p className="mt-1 font-mono text-xs text-arena-gold tabular">
-                  From KES {game.minStakeKes}
-                </p>
+
+                {/* Card body */}
+                <div className="p-4 text-center">
+                  <div
+                    className="mx-auto mb-3 flex size-12 items-center justify-center rounded-lg text-xl"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, var(${game.accentVar}) 12%, transparent)`,
+                      color: `var(${game.accentVar})`,
+                    }}
+                  >
+                    {game.glyph}
+                  </div>
+                  <p className="font-display text-sm font-semibold text-arena-text">
+                    {game.name}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-arena-gold tabular">
+                    From KES {game.minStakeKes}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
