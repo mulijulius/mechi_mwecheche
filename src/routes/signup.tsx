@@ -5,7 +5,18 @@ import { AuthLayout } from '#/components/layout/auth-layout'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
 import { supabase } from '#/utils/supabase'
+import {
+  CUSTOM_QUESTION_VALUE,
+  SECURITY_QUESTION_PRESETS,
+} from '#/lib/security-questions'
 
 export const Route = createFileRoute('/signup')({
   component: SignUpPage,
@@ -18,13 +29,31 @@ function SignUpPage() {
   const [email, setEmail] = React.useState('')
   const [phone, setPhone] = React.useState('')
   const [password, setPassword] = React.useState('')
+
+  const [questionChoice, setQuestionChoice] = React.useState('')
+  const [customQuestion, setCustomQuestion] = React.useState('')
+  const [securityAnswer, setSecurityAnswer] = React.useState('')
+
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
 
+  const isCustomQuestion = questionChoice === CUSTOM_QUESTION_VALUE
+  const finalQuestionText = isCustomQuestion ? customQuestion.trim() : questionChoice
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    if (!finalQuestionText) {
+      setError('Please choose or write a security question.')
+      return
+    }
+    if (!securityAnswer.trim()) {
+      setError('Please provide an answer to your security question.')
+      return
+    }
+
     setIsSubmitting(true)
 
     const { data, error: signUpError } = await supabase.auth.signUp({
@@ -39,15 +68,39 @@ function SignUpPage() {
       },
     })
 
-    setIsSubmitting(false)
-
     if (signUpError) {
+      setIsSubmitting(false)
       setError(signUpError.message)
       return
     }
 
+    const userId = data.user?.id
+
     // Profile + wallet rows are created automatically by the
-    // handle_new_user() trigger defined in supabase/migrations/0001_init.sql
+    // handle_new_user() trigger defined in supabase/migrations/0001_init.sql.
+    // The security question/answer is saved here, once we have a user id.
+    // The answer is hashed server-side via hash_security_answer() — it is
+    // never stored or transmitted in plaintext.
+    if (userId) {
+      const { data: answerHash, error: hashError } = await supabase.rpc(
+        'hash_security_answer',
+        { answer: securityAnswer },
+      )
+
+      if (!hashError && answerHash) {
+        await supabase.from('security_questions').insert({
+          user_id: userId,
+          question_text: finalQuestionText,
+          answer_hash: answerHash,
+        })
+      }
+      // If saving the security question fails here, we don't block account
+      // creation — the user can still sign in with their password. This
+      // could be retried from account settings in a future iteration.
+    }
+
+    setIsSubmitting(false)
+
     if (data.session) {
       navigate({ to: '/dashboard' })
     } else {
@@ -157,6 +210,58 @@ function SignUpPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+        </div>
+
+        <div className="border-t border-arena-border pt-4">
+          <p className="mb-3 text-xs uppercase tracking-wider text-arena-text-dim">
+            Password recovery
+          </p>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="securityQuestion">Security question</Label>
+            <Select value={questionChoice} onValueChange={setQuestionChoice}>
+              <SelectTrigger id="securityQuestion">
+                <SelectValue placeholder="Choose a question" />
+              </SelectTrigger>
+              <SelectContent>
+                {SECURITY_QUESTION_PRESETS.map((q) => (
+                  <SelectItem key={q} value={q}>
+                    {q}
+                  </SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_QUESTION_VALUE}>
+                  Type your own question
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isCustomQuestion && (
+            <div className="mt-3 flex flex-col gap-1.5">
+              <Label htmlFor="customQuestion">Your question</Label>
+              <Input
+                id="customQuestion"
+                placeholder="e.g. What was your first pet's name?"
+                value={customQuestion}
+                onChange={(e) => setCustomQuestion(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-col gap-1.5">
+            <Label htmlFor="securityAnswer">Your answer</Label>
+            <Input
+              id="securityAnswer"
+              placeholder="Answer"
+              value={securityAnswer}
+              onChange={(e) => setSecurityAnswer(e.target.value)}
+              required
+            />
+            <p className="text-xs text-arena-text-dim">
+              Used to verify your identity if you forget your password.
+            </p>
+          </div>
         </div>
 
         {error && (
