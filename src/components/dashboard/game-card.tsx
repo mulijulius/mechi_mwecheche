@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Users } from 'lucide-react'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
@@ -29,7 +30,6 @@ export function GameCard({ game, liveTables = 0, livePlayers = 0 }: GameCardProp
           alt={game.name}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        {/* subtle dark gradient overlay so text below reads cleanly */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
       </div>
 
@@ -82,9 +82,17 @@ export function GameCard({ game, liveTables = 0, livePlayers = 0 }: GameCardProp
           </Badge>
         </div>
 
-        <Button className="mt-4 w-full" size="sm" disabled>
-          Coming soon
-        </Button>
+        {game.route ? (
+          <Link to={game.route as any}>
+            <Button className="mt-4 w-full" size="sm">
+              Play Now
+            </Button>
+          </Link>
+        ) : (
+          <Button className="mt-4 w-full" size="sm" disabled>
+            Coming soon
+          </Button>
+        )}
       </div>
     </Card>
   )
