@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>3D Checkers — Live Match</title>
+<style>
+  :root {
+    --gold: #FFD700;
+    --text: #f0f0e8;
+    --text-muted: #aaa;
+    --board-bg: #1a3d10;
+  }
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--board-bg);
+    color: var(--text);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────────── */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px;
+    background: rgba(0,0,0,0.55);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 20;
+    backdrop-filter: blur(6px);
+  }
+  #topbar button {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+    color: var(--text); border-radius: 8px; padding: 7px 10px;
+    font-size: 0.8rem; cursor: pointer;
+  }
+  #topbar button:hover { background: rgba(255,255,255,0.16); }
+  #room-code { font-family: monospace; color: var(--gold); font-weight: 700; }
+  .pill {
+    font-size: 0.72rem; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.15); white-space: nowrap;
+  }
+  .pill-live { color: #6CE39A; border-color: rgba(108,227,154,0.4); background: rgba(108,227,154,0.08); }
+  .pill-wait { color: #FFD180; border-color: rgba(255,209,128,0.4); background: rgba(255,209,128,0.08); }
+  #topbar .spacer { flex: 1; }
+  #turn-pill { font-weight: 700; }
+
+  /* ── Player strip (compact, doesn't eat board width) ───────── */
+  #players {
+    position: fixed; top: 52px; left: 0; right: 0;
+    display: flex; justify-content: space-between;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    z-index: 15;
+    pointer-events: none;
+  }
+  .pcard {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 4px 10px 4px 6px;
+  }
+  .pcard.active { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.25); }
+  .pdot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .pdot.black { background: radial-gradient(circle at 35% 35%, #555, #111); border: 1px solid #333; }
+  .pdot.white { background: radial-gradient(circle at 35% 35%, #fff, #c8b87a); border: 1px solid #b8960c; }
+
+  /* ── Board ───────────────────────────────────────────────── */
+  #canvas-wrap {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #game-canvas {
+    width: 100%; height: 100%;
+    display: block;
+    touch-action: none; /* we own all touch gestures for piece picking */
+    cursor: pointer;
+  }
+
+  /* ── Overlays ────────────────────────────────────────────── */
+  #overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7);
+    z-index: 30;
+    text-align: center;
+    padding: 24px;
+  }
+  #overlay.show { display: flex; }
+  #overlay .card {
+    background: linear-gradient(160deg, #1a3d10 0%, #0d1f08 100%);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 18px; padding: 28px 30px;
+    max-width: 360px; width: 100%;
+  }
+  #overlay h2 { color: var(--gold); font-size: 1.4rem; margin-bottom: 8px; }
+  #overlay p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 18px; }
+  #overlay .room-big {
+    font-family: monospace; font-size: 1.8rem; letter-spacing: 0.25em;
+    color: var(--gold); font-weight: 700; margin: 10px 0 20px;
+  }
+  #overlay button {
+    background: var(--gold); color: #1a2e0f; border: none;
+    border-radius: 10px; padding: 10px 22px; font-weight: 700;
+    font-size: 0.9rem; cursor: pointer;
+  }
+  .spinner {
+    width: 36px; height: 36px; margin: 0 auto 14px;
+    border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold);
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px; padding: 9px 20px;
+    font-size: 0.85rem; z-index: 40; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+  <div id="topbar">
+    <button id="btn-lobby">← Lobby</button>
+    <span id="room-code">—</span>
+    <span id="variant-pill" class="pill">—</span>
+    <span id="status-pill" class="pill pill-wait">Connecting…</span>
+    <div class="spacer"></div>
+    <span id="turn-pill" class="pill">—</span>
+  </div>
+
+  <div id="players">
+    <div id="p-black" class="pcard"><span class="pdot black"></span><span id="p-black-name">—</span></div>
+    <div id="p-white" class="pcard"><span class="pdot white"></span><span id="p-white-name">—</span></div>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <div id="overlay" class="show">
+    <div class="card">
+      <div class="spinner"></div>
+      <h2>Loading match…</h2>
+      <p id="overlay-sub">Connecting to room</p>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Three.js (r128) — required globally as window.THREE -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Supabase JS UMD build, so this static page can talk to the DB directly -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <script type="module">
+    import { GameEngine } from './js/GameEngine.js';
+    import { Renderer3D } from './js/Renderer3D.js';
+    import { THEMES } from './js/Modules.js';
+
+    // ── Read config from the URL the opener window built for us ──────────
+    const params = new URLSearchParams(window.location.search);
+    const contestId    = params.get('contestId');
+    const supabaseUrl  = params.get('supabaseUrl');
+    const supabaseKey  = params.get('supabaseKey');
+    const myUserId     = params.get('userId');
+
+    const $ = (sel) => document.querySelector(sel);
+    const overlay     = $('#overlay');
+    const overlaySub  = $('#overlay-sub');
+    const statusPill  = $('#status-pill');
+    const turnPill    = $('#turn-pill');
+    const roomCodeEl  = $('#room-code');
+    const variantPill = $('#variant-pill');
+    const toastEl     = $('#toast');
+    const canvas      = $('#game-canvas');
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2200);
+    }
+
+    function showOverlay(title, sub, withCloseButton) {
+      overlay.querySelector('h2').textContent = title;
+      overlaySub.textContent = sub || '';
+      const old = overlay.querySelector('button');
+      if (old) old.remove();
+      if (withCloseButton) {
+        const btn = document.createElement('button');
+        btn.textContent = 'Back to Lobby';
+        btn.onclick = () => window.close();
+        overlay.querySelector('.card').appendChild(btn);
+      }
+      overlay.classList.add('show');
+    }
+    function hideOverlay() { overlay.classList.remove('show'); }
+
+    $('#btn-lobby').addEventListener('click', () => window.close());
+
+    if (!contestId || !supabaseUrl || !supabaseKey) {
+      showOverlay('Missing match info', 'This window was not opened correctly from the lobby.', true);
+      throw new Error('play.html: missing required query params');
+    }
+
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+
+    let contest = null;
+    let players = [];
+    let engine = null;
+    let renderer = null;
+    let myPlayer = null;
+    let oppPlayer = null;
+    let selected = null; // {row, col}
+
+    async function loadContestAndPlayers() {
+      const [contestRes, playersRes] = await Promise.all([
+        supabase.from('checkers_contests').select('*').eq('id', contestId).single(),
+        supabase.from('checkers_contest_players').select('*, profiles(username)').eq('contest_id', contestId),
+      ]);
+      if (contestRes.data) contest = contestRes.data;
+      if (playersRes.data) players = playersRes.data;
+      myPlayer  = players.find(p => p.user_id === myUserId) || null;
+      oppPlayer = players.find(p => p.user_id !== myUserId) || null;
+    }
+
+    function renderHeader() {
+      if (!contest) return;
+      roomCodeEl.textContent = contest.room_code;
+      variantPill.textContent = contest.variant === 'russian' ? 'Russian' : 'English';
+
+      if (contest.status === 'open') {
+        statusPill.textContent = 'Waiting for opponent…';
+        statusPill.className = 'pill pill-wait';
+      } else {
+        statusPill.textContent = 'Live';
+        statusPill.className = 'pill pill-live';
+      }
+
+      $('#p-black-name').textContent =
+        (myPlayer?.color === 'black' ? myPlayer : oppPlayer)?.profiles?.username ?? '—';
+      $('#p-white-name').textContent =
+        (myPlayer?.color === 'white' ? myPlayer : oppPlayer)?.profiles?.username ?? '—';
+    }
+
+    function renderTurn(turn) {
+      turnPill.textContent = turn === myPlayer?.color ? 'Your turn' : "Opponent's turn";
+      $('#p-black').classList.toggle('active', turn === 'black');
+      $('#p-white').classList.toggle('active', turn === 'white');
+    }
+
+    function mountEngine() {
+      if (engine || !contest || contest.status === 'open') return;
+
+      const themeKey = contest.theme || 'classic';
+      const theme = { id: themeKey, ...THEMES[themeKey] };
+
+      engine = new GameEngine({
+        gameType: contest.variant,
+        boardSize: 8,
+        themePreset: themeKey,
+        players: { black: null, white: null },
+      });
+
+      renderer = new Renderer3D(canvas, theme);
+
+      engine.bus.on('game:start', (snap) => { renderer.syncPieces(snap.board); renderTurn(snap.turn); });
+      engine.bus.on('game:turn',  (data) => { renderer.syncPieces(data.board); renderTurn(data.turn); renderer.clearSelection(); selected = null; });
+      engine.bus.on('game:undo',  (snap) => { renderer.syncPieces(snap.board); renderTurn(snap.turn); });
+      engine.bus.on('game:continuejump', () => { /* keep selection active for chained capture */ });
+      engine.bus.on('game:over',  (data) => {
+        const iWon = data.winner && data.winner === myPlayer?.color;
+        const isDraw = !data.winner;
+        showOverlay(
+          isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
+          (data.reason || '').replace('-', ' '),
+          true,
+        );
+        const winnerId = data.winner
+          ? (data.winner === myPlayer?.color ? myPlayer?.user_id : oppPlayer?.user_id) ?? null
+          : null;
+        supabase.rpc('complete_checkers_contest', { p_contest_id: contestId, p_winner_id: winnerId });
+      });
+
+      engine.startGame();
+      hideOverlay();
+    }
+
+    // ── Picking: shared logic for mouse click and touch tap ─────────────
+    function handlePick(clientX, clientY) {
+      if (!engine || !renderer || engine.status !== 'playing') return;
+      if (engine.turn !== myPlayer?.color) { toast("It's not your turn"); return; }
+
+      const hit = renderer.pick(clientX, clientY);
+      if (!hit) return;
+
+      if (hit.type === 'hint' && selected) {
+        const ok = engine.move(selected, { row: hit.row, col: hit.col });
+        if (!ok) toast('Illegal move');
+        return;
+      }
+
+      if (hit.type === 'piece') {
+        if (hit.color !== myPlayer?.color) { toast("That's not your piece"); return; }
+        selected = { row: hit.row, col: hit.col };
+        renderer.selectPiece(hit.row, hit.col);
+        renderer.showHints(engine.movesFor(hit.row, hit.col));
+        return;
+      }
+
+      // Tapped an empty/light tile — deselect
+      renderer.clearSelection();
+      selected = null;
+    }
+
+    canvas.addEventListener('click', (e) => handlePick(e.clientX, e.clientY));
+
+    // Touch: tap-to-select / tap-to-move. We avoid treating a drag/pinch
+    // as a tap by checking movement distance between touchstart and touchend.
+    let touchStartX = 0, touchStartY = 0, touchMoved = false;
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchMoved = false;
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      if (Math.hypot(dx, dy) > 12) touchMoved = true;
+    }, { passive: true });
+    canvas.addEventListener('touchend', (e) => {
+      if (touchMoved) return; // was a drag/scroll gesture, not a tap
+      const t = e.changedTouches[0];
+      if (t) handlePick(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    // ── Realtime updates ──────────────────────────────────────────────
+    const channel = supabase
+      .channel(`contest-room-${contestId}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'checkers_contests', filter: `id=eq.${contestId}` },
+        async (payload) => {
+          contest = payload.new;
+          renderHeader();
+          if (contest.status !== 'open') {
+            await loadContestAndPlayers();
+            renderHeader();
+            mountEngine();
+          }
+        })
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'checkers_contest_players', filter: `contest_id=eq.${contestId}` },
+        async () => {
+          await loadContestAndPlayers();
+          renderHeader();
+          mountEngine();
+        })
+      .subscribe();
+
+    window.addEventListener('beforeunload', () => {
+      supabase.removeChannel(channel);
+      if (renderer) renderer.destroy();
+    });
+
+    // ── Boot ────────────────────────────────────────────────────────────
+    (async function boot() {
+      await loadContestAndPlayers();
+      if (!contest) {
+        showOverlay('Contest not found', 'This match may have ended or the link is invalid.', true);
+        return;
+      }
+      renderHeader();
+      if (contest.status === 'open') {
+        showOverlay('Waiting for opponent…', `Share room code ${contest.room_code}`, false);
+      } else {
+        mountEngine();
+      }
+    })();
+  </script>
+</body>
+</html>
