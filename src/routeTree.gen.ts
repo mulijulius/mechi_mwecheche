@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
@@ -21,7 +23,12 @@ import { Route as AuthedDashboardWalletRouteImport } from './routes/_authed/dash
 import { Route as AuthedDashboardHistoryRouteImport } from './routes/_authed/dashboard/history'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin/users'
 import { Route as AuthedAdminTransactionsRouteImport } from './routes/_authed/admin/transactions'
+import { Route as AuthedAdminTrafficRouteImport } from './routes/_authed/admin/traffic'
+import { Route as AuthedAdminSupportRouteImport } from './routes/_authed/admin/support'
+import { Route as AuthedAdminPendingRouteImport } from './routes/_authed/admin/pending'
 import { Route as AuthedAdminGamesRouteImport } from './routes/_authed/admin/games'
+import { Route as AuthedAdminFinanceRouteImport } from './routes/_authed/admin/finance'
+import { Route as AuthedAdminApprovalsRouteImport } from './routes/_authed/admin/approvals'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -31,6 +38,16 @@ const SignupRoute = SignupRouteImport.update({
 const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
@@ -82,19 +99,51 @@ const AuthedAdminTransactionsRoute = AuthedAdminTransactionsRouteImport.update({
   path: '/transactions',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminTrafficRoute = AuthedAdminTrafficRouteImport.update({
+  id: '/traffic',
+  path: '/traffic',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminSupportRoute = AuthedAdminSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminPendingRoute = AuthedAdminPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 const AuthedAdminGamesRoute = AuthedAdminGamesRouteImport.update({
   id: '/games',
   path: '/games',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminFinanceRoute = AuthedAdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminApprovalsRoute = AuthedAdminApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/admin': typeof AuthedAdminRouteWithChildren
   '/dashboard': typeof AuthedDashboardRouteWithChildren
+  '/admin/approvals': typeof AuthedAdminApprovalsRoute
+  '/admin/finance': typeof AuthedAdminFinanceRoute
   '/admin/games': typeof AuthedAdminGamesRoute
+  '/admin/pending': typeof AuthedAdminPendingRoute
+  '/admin/support': typeof AuthedAdminSupportRoute
+  '/admin/traffic': typeof AuthedAdminTrafficRoute
   '/admin/transactions': typeof AuthedAdminTransactionsRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/dashboard/history': typeof AuthedDashboardHistoryRoute
@@ -104,9 +153,16 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
+  '/admin/approvals': typeof AuthedAdminApprovalsRoute
+  '/admin/finance': typeof AuthedAdminFinanceRoute
   '/admin/games': typeof AuthedAdminGamesRoute
+  '/admin/pending': typeof AuthedAdminPendingRoute
+  '/admin/support': typeof AuthedAdminSupportRoute
+  '/admin/traffic': typeof AuthedAdminTrafficRoute
   '/admin/transactions': typeof AuthedAdminTransactionsRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/dashboard/history': typeof AuthedDashboardHistoryRoute
@@ -118,11 +174,18 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/dashboard': typeof AuthedDashboardRouteWithChildren
+  '/_authed/admin/approvals': typeof AuthedAdminApprovalsRoute
+  '/_authed/admin/finance': typeof AuthedAdminFinanceRoute
   '/_authed/admin/games': typeof AuthedAdminGamesRoute
+  '/_authed/admin/pending': typeof AuthedAdminPendingRoute
+  '/_authed/admin/support': typeof AuthedAdminSupportRoute
+  '/_authed/admin/traffic': typeof AuthedAdminTrafficRoute
   '/_authed/admin/transactions': typeof AuthedAdminTransactionsRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/dashboard/history': typeof AuthedDashboardHistoryRoute
@@ -134,11 +197,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forgot-password'
+    | '/reset-password'
     | '/signin'
     | '/signup'
     | '/admin'
     | '/dashboard'
+    | '/admin/approvals'
+    | '/admin/finance'
     | '/admin/games'
+    | '/admin/pending'
+    | '/admin/support'
+    | '/admin/traffic'
     | '/admin/transactions'
     | '/admin/users'
     | '/dashboard/history'
@@ -148,9 +218,16 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/forgot-password'
+    | '/reset-password'
     | '/signin'
     | '/signup'
+    | '/admin/approvals'
+    | '/admin/finance'
     | '/admin/games'
+    | '/admin/pending'
+    | '/admin/support'
+    | '/admin/traffic'
     | '/admin/transactions'
     | '/admin/users'
     | '/dashboard/history'
@@ -161,11 +238,18 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
+    | '/forgot-password'
+    | '/reset-password'
     | '/signin'
     | '/signup'
     | '/_authed/admin'
     | '/_authed/dashboard'
+    | '/_authed/admin/approvals'
+    | '/_authed/admin/finance'
     | '/_authed/admin/games'
+    | '/_authed/admin/pending'
+    | '/_authed/admin/support'
+    | '/_authed/admin/traffic'
     | '/_authed/admin/transactions'
     | '/_authed/admin/users'
     | '/_authed/dashboard/history'
@@ -177,6 +261,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
 }
@@ -195,6 +281,20 @@ declare module '@tanstack/react-router' {
       path: '/signin'
       fullPath: '/signin'
       preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -267,6 +367,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminTransactionsRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/traffic': {
+      id: '/_authed/admin/traffic'
+      path: '/traffic'
+      fullPath: '/admin/traffic'
+      preLoaderRoute: typeof AuthedAdminTrafficRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/support': {
+      id: '/_authed/admin/support'
+      path: '/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AuthedAdminSupportRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/pending': {
+      id: '/_authed/admin/pending'
+      path: '/pending'
+      fullPath: '/admin/pending'
+      preLoaderRoute: typeof AuthedAdminPendingRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/admin/games': {
       id: '/_authed/admin/games'
       path: '/games'
@@ -274,18 +395,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminGamesRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/finance': {
+      id: '/_authed/admin/finance'
+      path: '/finance'
+      fullPath: '/admin/finance'
+      preLoaderRoute: typeof AuthedAdminFinanceRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/approvals': {
+      id: '/_authed/admin/approvals'
+      path: '/approvals'
+      fullPath: '/admin/approvals'
+      preLoaderRoute: typeof AuthedAdminApprovalsRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
   }
 }
 
 interface AuthedAdminRouteChildren {
+  AuthedAdminApprovalsRoute: typeof AuthedAdminApprovalsRoute
+  AuthedAdminFinanceRoute: typeof AuthedAdminFinanceRoute
   AuthedAdminGamesRoute: typeof AuthedAdminGamesRoute
+  AuthedAdminPendingRoute: typeof AuthedAdminPendingRoute
+  AuthedAdminSupportRoute: typeof AuthedAdminSupportRoute
+  AuthedAdminTrafficRoute: typeof AuthedAdminTrafficRoute
   AuthedAdminTransactionsRoute: typeof AuthedAdminTransactionsRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminApprovalsRoute: AuthedAdminApprovalsRoute,
+  AuthedAdminFinanceRoute: AuthedAdminFinanceRoute,
   AuthedAdminGamesRoute: AuthedAdminGamesRoute,
+  AuthedAdminPendingRoute: AuthedAdminPendingRoute,
+  AuthedAdminSupportRoute: AuthedAdminSupportRoute,
+  AuthedAdminTrafficRoute: AuthedAdminTrafficRoute,
   AuthedAdminTransactionsRoute: AuthedAdminTransactionsRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
@@ -327,6 +472,8 @@ const AuthedRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
 }
