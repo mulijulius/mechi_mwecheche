@@ -401,6 +401,10 @@
       $('#p-white').classList.toggle('active', turn === 'white');
     }
 
+    // Guards re-entrancy while we wait for make_checkers_move() to resolve,
+    // so a fast double-click can't fire two RPC calls for the same move.
+    let moveInFlight = false;
+
     function mountEngine() {
       if (engine || !contest) return;
       if (contest.status === 'open' || contest.status === 'completed' || contest.status === 'cancelled') return;
@@ -417,39 +421,91 @@
 
       renderer = new Renderer3D(canvas, theme);
 
-      engine.bus.on('game:start', (snap) => { renderer.syncPieces(snap.board); renderTurn(snap.turn); });
-      engine.bus.on('game:turn',  (data) => { renderer.syncPieces(data.board); renderTurn(data.turn); renderer.clearSelection(); selected = null; });
-      engine.bus.on('game:undo',  (snap) => { renderer.syncPieces(snap.board); renderTurn(snap.turn); });
-      engine.bus.on('game:continuejump', () => { /* keep selection active for chained capture */ });
-      engine.bus.on('game:over',  (data) => {
-        const iWon = data.winner && data.winner === myPlayer?.color;
-        const isDraw = !data.winner;
-        showOverlay(
-          isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
-          (data.reason || '').replace('-', ' '),
-          true,
-        );
-        const winnerId = data.winner
-          ? (data.winner === myPlayer?.color ? myPlayer?.user_id : oppPlayer?.user_id) ?? null
-          : null;
-        supabase.rpc('complete_checkers_contest', { p_contest_id: contestId, p_winner_id: winnerId });
-      });
+      // NOTE: we intentionally do NOT drive the rendered board off
+      // engine.bus events here. The engine is used purely as a local rules
+      // validator (legal moves, capture chains, promotion, game-over
+      // detection) — the board that actually gets *rendered* always comes
+      // from the server's board_state/turn columns, applied in
+      // applyServerState() below. This is what makes the two players'
+      // boards converge: both sides render the same authoritative state
+      // instead of two independent local simulations that never talk to
+      // each other.
 
-      engine.startGame();
+      if (contest.board_state) {
+        // Resuming a match already in progress (e.g. tab reload).
+        engine.board = contest.board_state;
+        engine.turn  = contest.turn || 'black';
+        engine.status = 'playing';
+        engine.moveCount = contest.move_count || 0;
+        renderer.syncPieces(engine.board);
+        renderTurn(engine.turn);
+      } else {
+        // First player to mount starts the canonical board and writes it to
+        // the server immediately, so the engine's starting layout becomes
+        // the shared source of truth rather than each tab silently
+        // generating its own copy. Both players' tabs run this same branch
+        // independently on first mount and race to seed — that's expected
+        // and handled by seed_checkers_board() being a no-op for whoever
+        // loses the race (see migration comment), not by turn ownership,
+        // since seeding the board isn't a move by either side.
+        engine.startGame();
+        renderer.syncPieces(engine.board);
+        renderTurn(engine.turn);
+        supabase.rpc('seed_checkers_board', {
+          p_contest_id: contestId,
+          p_user_id: myUserId,
+          p_board_state: engine.board,
+          p_turn: engine.turn,
+          p_move_count: engine.moveCount,
+        }).then(({ error }) => {
+          if (error) console.error('initial board seed failed', error);
+        });
+      }
+
       hideOverlay();
+    }
+
+    // Applies a board/turn coming from the server (via realtime or initial
+    // load) onto the local renderer and rules engine. This is the single
+    // place that makes an opponent's move actually appear on screen.
+    function applyServerState(updatedContest) {
+      if (!engine || !renderer) return;
+      if (!updatedContest.board_state) return;
+
+      engine.board = updatedContest.board_state;
+      engine.turn  = updatedContest.turn || 'black';
+      engine.moveCount = updatedContest.move_count || 0;
+      engine.status = 'playing';
+
+      renderer.syncPieces(engine.board);
+      renderTurn(engine.turn);
+      renderer.clearSelection();
+      selected = null;
+      moveInFlight = false;
+    }
+
+    function handleGameOver(data) {
+      engine.status = 'ended';
+      const iWon = data.winner && data.winner === myPlayer?.color;
+      const isDraw = !data.winner;
+      showOverlay(
+        isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
+        (data.reason || '').replace('-', ' '),
+        true,
+      );
     }
 
     // ── Picking: shared logic for mouse click and touch tap ─────────────
     function handlePick(clientX, clientY) {
       if (!engine || !renderer || engine.status !== 'playing') return;
+      if (moveInFlight) return; // already waiting on a move RPC round-trip
       if (engine.turn !== myPlayer?.color) { toast("It's not your turn"); return; }
 
       const hit = renderer.pick(clientX, clientY);
       if (!hit) return;
 
       if (hit.type === 'hint' && selected) {
-        const ok = engine.move(selected, { row: hit.row, col: hit.col });
-        if (!ok) toast('Illegal move');
+        submitMove(selected, { row: hit.row, col: hit.col });
         return;
       }
 
@@ -464,6 +520,83 @@
       // Tapped an empty/light tile — deselect
       renderer.clearSelection();
       selected = null;
+    }
+
+    // Validates the move locally against the rules engine, applies it
+    // in-engine to compute the resulting board, then persists that result
+    // via make_checkers_move(). We don't touch the rendered board here at
+    // all — the render only ever updates once the server's realtime UPDATE
+    // comes back through applyServerState(), so both players always end up
+    // looking at the exact same state instead of the mover's tab racing
+    // ahead of what's actually been saved.
+    async function submitMove(from, to) {
+      const legal = engine.allLegalMoves();
+      const match = legal.find(m =>
+        m.from.row === from.row && m.from.col === from.col &&
+        m.to.row   === to.row   && m.to.col   === to.col
+      );
+      if (!match) { toast('Illegal move'); return; }
+
+      moveInFlight = true;
+      renderer.clearSelection();
+      selected = null;
+
+      let overReason = null;
+      engine.bus.once('game:over', (data) => { overReason = data.reason; });
+
+      const ok = engine.move(from, to);
+      if (!ok) { moveInFlight = false; return; }
+
+      // Optimistic render: show the move immediately on the mover's own
+      // screen rather than waiting for the realtime round-trip, so it
+      // doesn't feel laggy. This is safe because handlePick already blocks
+      // further input while moveInFlight is true, and if the server
+      // rejects the move below we explicitly roll the picture back via
+      // applyServerState(). The opponent's screen still only updates once
+      // the server write lands — this optimism is purely local.
+      renderer.syncPieces(engine.board);
+      renderTurn(engine.turn);
+
+      // engine.move() may leave us mid multi-jump (status stays 'playing',
+      // same turn) — that's fine, we just persist whatever state the
+      // engine landed in. _endTurn() inside move() already set
+      // engine.status/engine.winner synchronously if the game just ended.
+      const turnAfter = engine.turn;
+      const boardAfter = engine.snapshot.board;
+      const moveCountAfter = engine.moveCount;
+      const isGameOver = engine.status === 'ended';
+
+      let winnerId = null;
+      if (isGameOver && engine.winner) {
+        winnerId = engine.winner === myPlayer?.color ? myPlayer?.user_id : oppPlayer?.user_id;
+      }
+
+      const { data, error } = await supabase.rpc('make_checkers_move', {
+        p_contest_id: contestId,
+        p_user_id: myUserId,
+        p_board_state: boardAfter,
+        p_turn: turnAfter,
+        p_move_count: moveCountAfter,
+        p_game_over: isGameOver,
+        p_winner_id: winnerId,
+      });
+
+      if (error || data !== 'ok') {
+        // Someone else's move (or a stale local board) beat us to it.
+        // Re-load the authoritative contest row and snap back to it
+        // instead of leaving the player stuck on a board that diverged
+        // from the server.
+        console.error('make_checkers_move failed', error, data);
+        toast(data === 'not_your_turn' ? "It's not your turn" : 'Move failed — syncing…');
+        await loadContestAndPlayers();
+        if (contest.board_state) applyServerState(contest);
+        moveInFlight = false;
+        return;
+      }
+
+      if (isGameOver) handleGameOver({ winner: engine.winner, reason: overReason });
+      // moveInFlight is cleared by applyServerState() once our own realtime
+      // UPDATE round-trips back to us.
     }
 
     canvas.addEventListener('click', (e) => handlePick(e.clientX, e.clientY));
@@ -518,10 +651,39 @@
             return;
           }
 
-          if (contest.status !== 'open' && contest.status !== 'cancelled' && contest.status !== 'completed') {
+          // Normal game-over via complete_checkers_contest (not a forfeit) —
+          // this is the realtime path for the player who did NOT just make
+          // the winning move locally (they already showed the overlay
+          // themselves inside submitMove's handleGameOver call).
+          if (contest.status === 'completed' && !hasLeftOrEnded) {
+            hasLeftOrEnded = true;
+            if (engine) engine.status = 'ended';
+            if (contest.board_state) {
+              renderer?.syncPieces(contest.board_state);
+            }
+            const iWon = contest.winner_id === myUserId;
+            const isDraw = !contest.winner_id;
+            showOverlay(
+              isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
+              '',
+              true,
+            );
+            return;
+          }
+
+          if (contest.status === 'open' || contest.status === 'cancelled' || contest.status === 'completed') return;
+
+          if (!engine) {
+            // First transition into booked/in_progress for this tab.
             await loadContestAndPlayers();
             renderHeader();
             mountEngine();
+          } else {
+            // Engine already mounted — this UPDATE is a move (ours or the
+            // opponent's). Apply the server's board/turn directly; this is
+            // the line that actually fixes moves not showing up on the
+            // other player's screen.
+            applyServerState(contest);
           }
         })
       .on('postgres_changes',
