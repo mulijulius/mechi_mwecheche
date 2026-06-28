@@ -1,21 +1,28 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
 import {
+  Activity,
   Gamepad2,
   History,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   Shield,
+  ShieldCheck,
   Users,
   Wallet,
 } from 'lucide-react'
 import { cn } from '#/lib/utils'
 import { useAuth } from '#/lib/auth-context'
+import { ADMIN_ROLE_LABEL } from '#/lib/admin-permissions'
+import type { AdminCapability } from '#/types/database.types'
 
 interface NavItem {
   to: string
   label: string
   icon: LucideIcon
+  /** Omit to show the item to any approved admin, regardless of sub-role. */
+  requires?: AdminCapability
 }
 
 const playerNav: Array<NavItem> = [
@@ -26,15 +33,22 @@ const playerNav: Array<NavItem> = [
 
 const adminNav: Array<NavItem> = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { to: '/admin/users', label: 'Players', icon: Users },
-  { to: '/admin/transactions', label: 'Transactions', icon: Wallet },
-  { to: '/admin/games', label: 'Games', icon: Gamepad2 },
+  { to: '/admin/approvals', label: 'Approvals', icon: ShieldCheck, requires: 'approve_admins' },
+  { to: '/admin/users', label: 'Players', icon: Users, requires: 'manage_users' },
+  { to: '/admin/finance', label: 'Finance', icon: Wallet, requires: 'financial_records' },
+  { to: '/admin/support', label: 'Player chats', icon: MessageCircle, requires: 'player_chat' },
+  { to: '/admin/traffic', label: 'Traffic', icon: Activity, requires: 'statistics' },
+  { to: '/admin/games', label: 'Games', icon: Gamepad2, requires: 'manage_users' },
 ]
 
 export function Sidebar({ variant }: { variant: 'player' | 'admin' }) {
-  const { profile, signOut } = useAuth()
-  const items = variant === 'player' ? playerNav : adminNav
+  const { profile, can, signOut } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+
+  const items =
+    variant === 'player'
+      ? playerNav
+      : adminNav.filter((item) => !item.requires || can(item.requires))
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-arena-border bg-arena-surface">
@@ -55,7 +69,9 @@ export function Sidebar({ variant }: { variant: 'player' | 'admin' }) {
       {variant === 'admin' && (
         <div className="flex items-center gap-2 border-b border-arena-border bg-arena-gold/5 px-5 py-2.5">
           <Shield className="size-3.5 text-arena-gold" />
-          <span className="text-xs font-medium text-arena-gold">Admin console</span>
+          <span className="text-xs font-medium text-arena-gold">
+            {profile?.admin_role ? ADMIN_ROLE_LABEL[profile.admin_role] : 'Admin console'}
+          </span>
         </div>
       )}
 
@@ -94,7 +110,11 @@ export function Sidebar({ variant }: { variant: 'player' | 'admin' }) {
               {profile?.username ?? 'Loading…'}
             </p>
             <p className="text-[10px] capitalize text-arena-text-dim">
-              {profile?.role ?? ''}
+              {profile?.role === 'admin'
+                ? profile.admin_role
+                  ? ADMIN_ROLE_LABEL[profile.admin_role]
+                  : 'admin'
+                : profile?.role ?? ''}
             </p>
           </div>
         </div>
