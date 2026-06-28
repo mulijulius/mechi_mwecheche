@@ -18,7 +18,7 @@
 
 import * as React from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, ExternalLink, RotateCcw } from 'lucide-react'
+import { ArrowLeft, ExternalLink, LogOut, RotateCcw } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { supabase } from '#/utils/supabase'
@@ -53,6 +53,7 @@ function buildPlayUrl(contestId: string, userId: string | undefined) {
     supabaseUrl,
     supabaseKey,
     userId: userId ?? '',
+    lobbyUrl: `${window.location.origin}/dashboard/checkers`,
   })
   return `/checkers/play.html?${params.toString()}`
 }
@@ -102,7 +103,8 @@ function CheckersGameRoom() {
   const [contest, setContest] = React.useState<ContestRow | null>(null)
   const [players, setPlayers] = React.useState<ContestPlayer[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [gameOver, setGameOver] = React.useState<{ winner: string | null; reason: string } | null>(null)
+  const [gameOver, setGameOver] = React.useState<{ winner: string | null; reason: string; forfeited: boolean } | null>(null)
+  const [wasCancelled, setWasCancelled] = React.useState(false)
 
   const boardWindowRef = React.useRef<Window | null>(null)
   const hasAutoOpenedRef = React.useRef(false)
@@ -201,20 +203,61 @@ function CheckersGameRoom() {
     boardWindowRef.current = openBoardWindow(contestId, user?.id)
   }
 
-  // ── Detect game-over reported back via the contests row ──────────────────
-  // The popup writes the result straight to Supabase via complete_checkers_contest,
-  // so we just watch the contests row for status -> 'completed' to know it ended.
+  // ── Leave / forfeit from this view ────────────────────────────────────────
+  // Lets a player leave even if they never opened the board popup (or
+  // closed it but are still sitting on this page). Uses the same RPC as
+  // the popup's Leave Match button.
+
+  const [isLeaving, setIsLeaving] = React.useState(false)
+
+  async function handleLeaveMatch() {
+    if (!contest || !user?.id || isLeaving) return
+
+    const isStillOpen = contest.status === 'open'
+    const confirmMsg = isStillOpen
+      ? 'Cancel this match? ' + (contest.entry_fee_cents > 0 ? 'Your stake will be refunded.' : 'No opponent has joined yet.')
+      : 'Leave this match? Your opponent will win and take the pot. This can\u2019t be undone.'
+
+    if (!window.confirm(confirmMsg)) return
+
+    setIsLeaving(true)
+    try {
+      await supabase.rpc('leave_checkers_contest', {
+        p_contest_id: contestId,
+        p_user_id: user.id,
+      })
+      if (boardWindowRef.current && !boardWindowRef.current.closed) {
+        boardWindowRef.current.close()
+      }
+      navigate({ to: '/dashboard/checkers' })
+    } finally {
+      setIsLeaving(false)
+    }
+  }
+
+  // ── Detect game-over / cancellation reported back via the contests row ───
+  // The popup writes the result straight to Supabase via complete_checkers_contest
+  // or leave_checkers_contest, so we just watch the contests row for status
+  // changes to know what happened — this works whether the popup is open,
+  // closed, or was never opened on this device at all.
 
   React.useEffect(() => {
-    if (contest?.status === 'completed' && !gameOver) {
+    if (!contest) return
+
+    if (contest.status === 'cancelled' && !wasCancelled) {
+      setWasCancelled(true)
+      return
+    }
+
+    if (contest.status === 'completed' && !gameOver) {
       const myColor = players.find(p => p.user_id === user?.id)?.color ?? null
       const oppColor = players.find(p => p.user_id !== user?.id)?.color ?? null
       const winnerColor = contest.winner_id
         ? (contest.winner_id === user?.id ? myColor : oppColor)
         : null
-      setGameOver({ winner: winnerColor, reason: 'game-over' })
+      setGameOver({ winner: winnerColor, reason: 'game-over', forfeited: !!contest.forfeited_by })
     }
-  }, [contest, gameOver, players, user?.id])
+  }, [contest, gameOver, wasCancelled, players, user?.id])
 
   // ── Loading / waiting states ─────────────────────────────────────────────
 
@@ -261,6 +304,18 @@ function CheckersGameRoom() {
           {contest.status === 'booked' && !gameOver && (
             <Badge variant="emerald">Live</Badge>
           )}
+          {(contest.status === 'open' || contest.status === 'booked') && !gameOver && !wasCancelled && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-arena-red hover:text-arena-red"
+              onClick={handleLeaveMatch}
+              disabled={isLeaving}
+            >
+              <LogOut className="size-4" />
+              {contest.status === 'open' ? 'Cancel' : 'Leave Match'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -292,7 +347,9 @@ function CheckersGameRoom() {
 
         {/* Where the board used to render inline — now just status + open button */}
         <div className="relative flex flex-1 items-center justify-center bg-arena-bg">
-          {contest.status === 'open' ? (
+          {wasCancelled ? (
+            <CancelledOverlay onBackToLobby={() => navigate({ to: '/dashboard/checkers' })} />
+          ) : contest.status === 'open' ? (
             <WaitingOverlay roomCode={contest.room_code} />
           ) : gameOver ? (
             <GameOverOverlay
@@ -368,26 +425,46 @@ function OpenBoardPrompt({ onOpen }: { onOpen: () => void }) {
 }
 
 function GameOverOverlay({ gameOver, myColor, onPlayAgain }: {
-  gameOver: { winner: string | null; reason: string }
+  gameOver: { winner: string | null; reason: string; forfeited: boolean }
   myColor: 'black' | 'white' | null
   onPlayAgain: () => void
 }) {
   const iWon = gameOver.winner && gameOver.winner === myColor
   const isDraw = !gameOver.winner
 
+  const title = gameOver.forfeited
+    ? (iWon ? 'Opponent left — you win!' : 'Match ended')
+    : (isDraw ? "It's a Draw!" : iWon ? 'You Win!' : 'You Lose')
+
+  const subtitle = gameOver.forfeited
+    ? (iWon ? 'The pot has been credited to your wallet.' : 'Your opponent forfeited the match.')
+    : gameOver.reason?.replace('-', ' ')
+
   return (
     <div className="flex flex-col items-center gap-5 text-center">
-      <div className="text-5xl">{isDraw ? '🤝' : iWon ? '🏆' : '😔'}</div>
+      <div className="text-5xl">{gameOver.forfeited ? '🚪' : isDraw ? '🤝' : iWon ? '🏆' : '😔'}</div>
       <div>
-        <p className="font-display text-2xl font-bold text-arena-text">
-          {isDraw ? "It's a Draw!" : iWon ? 'You Win!' : 'You Lose'}
-        </p>
-        <p className="mt-1 text-sm capitalize text-arena-text-dim">
-          {gameOver.reason?.replace('-', ' ')}
-        </p>
+        <p className="font-display text-2xl font-bold text-arena-text">{title}</p>
+        <p className="mt-1 text-sm capitalize text-arena-text-dim">{subtitle}</p>
       </div>
       <Button onClick={onPlayAgain} className="gap-2">
         <RotateCcw className="size-4" />
+        Back to Lobby
+      </Button>
+    </div>
+  )
+}
+
+function CancelledOverlay({ onBackToLobby }: { onBackToLobby: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-5 text-center">
+      <div className="text-5xl">🚪</div>
+      <div>
+        <p className="font-display text-2xl font-bold text-arena-text">Match Cancelled</p>
+        <p className="mt-1 text-sm text-arena-text-dim">The host left before the match started.</p>
+      </div>
+      <Button onClick={onBackToLobby} className="gap-2">
+        <ArrowLeft className="size-4" />
         Back to Lobby
       </Button>
     </div>
