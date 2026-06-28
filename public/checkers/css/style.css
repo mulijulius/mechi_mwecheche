@@ -284,16 +284,6 @@ html, body {
 .ctrl-btn-danger { border-color: rgba(229,57,53,0.4); color: #EF9A9A; }
 .ctrl-btn-danger:hover { background: rgba(229,57,53,0.15); }
 
-/* Camera controls */
-.cam-controls { display: flex; flex-direction: column; gap: 6px; }
-.cam-btn {
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--radius-sm); color: var(--text-muted);
-  padding: 5px 4px; font-size: 0.72rem; cursor: pointer;
-  transition: all var(--transition);
-}
-.cam-btn:hover { border-color: rgba(76,175,80,0.5); color: var(--text); }
-
 /* In-game theme strip */
 .in-game-themes {
   display: flex; flex-direction: column; gap: 6px;
