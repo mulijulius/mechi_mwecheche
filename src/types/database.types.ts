@@ -1,5 +1,5 @@
-// Generated to match supabase/migrations/0001_init.sql, 0002_security_questions.sql
-// and 0003_admin_roles.sql.
+// Generated to match supabase/migrations/0001_init.sql, 0002_security_questions.sql,
+// 0003_admin_roles.sql, and 0004_checkers_matchmaking.sql.
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
 
 export type GameSlug = 'ludo' | 'checkers' | 'chess' | 'billiards' | 'solitaire'
@@ -23,11 +23,19 @@ export type AdminStatus = 'pending' | 'approved' | 'rejected'
 
 export type SupportMessageSender = 'player' | 'admin'
 
+// ---------------------------------------------------------------------------
+// Checkers-specific types (from 0004_checkers_matchmaking.sql)
+// ---------------------------------------------------------------------------
+
+export type CheckersVariant = 'english' | 'russian'
+
+export type CheckersTheme = 'classic' | 'green' | 'midnight' | 'red' | 'ivory'
+
+export type ContestStatus = 'open' | 'booked' | 'in_progress' | 'completed' | 'cancelled'
+
 /**
  * Single source of truth for what each admin sub-role can do, mirrored from
  * the has_admin_capability() Postgres function in 0003_admin_roles.sql.
- * Kept here (rather than only in #/lib/admin-permissions.ts) so the type of
- * a capability key is shared with the RPC call sites.
  */
 export type AdminCapability =
   | 'manage_users'
@@ -114,15 +122,7 @@ export interface Database {
           currency?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: 'wallets_user_id_fkey'
-            columns: ['user_id']
-            isOneToOne: true
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
+        Relationships: [{ foreignKeyName: 'wallets_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] }]
       }
       games: {
         Row: {
@@ -177,7 +177,7 @@ export interface Database {
           host_id: string
           stake_cents: number
           pot_cents?: number
-          max_players: number
+          max_players?: number
           status?: MatchStatus
           winner_id?: string | null
           created_at?: string
@@ -198,27 +198,8 @@ export interface Database {
           completed_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'matches_game_id_fkey'
-            columns: ['game_id']
-            isOneToOne: false
-            referencedRelation: 'games'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'matches_host_id_fkey'
-            columns: ['host_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'matches_winner_id_fkey'
-            columns: ['winner_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
+          { foreignKeyName: 'matches_game_id_fkey'; columns: ['game_id']; referencedRelation: 'games'; referencedColumns: ['id'] },
+          { foreignKeyName: 'matches_host_id_fkey'; columns: ['host_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
       match_players: {
@@ -244,20 +225,8 @@ export interface Database {
           joined_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: 'match_players_match_id_fkey'
-            columns: ['match_id']
-            isOneToOne: false
-            referencedRelation: 'matches'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'match_players_user_id_fkey'
-            columns: ['user_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
+          { foreignKeyName: 'match_players_match_id_fkey'; columns: ['match_id']; referencedRelation: 'matches'; referencedColumns: ['id'] },
+          { foreignKeyName: 'match_players_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
       transactions: {
@@ -295,150 +264,167 @@ export interface Database {
           created_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: 'transactions_user_id_fkey'
-            columns: ['user_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'transactions_match_id_fkey'
-            columns: ['match_id']
-            isOneToOne: false
-            referencedRelation: 'matches'
-            referencedColumns: ['id']
-          },
+          { foreignKeyName: 'transactions_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
-      security_questions: {
+      // ---- Checkers-specific tables ----------------------------------------
+      checkers_contests: {
+        Row: {
+          id: string
+          host_id: string
+          variant: CheckersVariant
+          theme: CheckersTheme
+          entry_fee_cents: number
+          pot_cents: number
+          status: ContestStatus
+          winner_id: string | null
+          room_code: string
+          created_at: string
+          booked_at: string | null
+          started_at: string | null
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          host_id: string
+          variant?: CheckersVariant
+          theme?: CheckersTheme
+          entry_fee_cents?: number
+          pot_cents?: number
+          status?: ContestStatus
+          winner_id?: string | null
+          room_code?: string
+          created_at?: string
+          booked_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          host_id?: string
+          variant?: CheckersVariant
+          theme?: CheckersTheme
+          entry_fee_cents?: number
+          pot_cents?: number
+          status?: ContestStatus
+          winner_id?: string | null
+          room_code?: string
+          created_at?: string
+          booked_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: 'checkers_contests_host_id_fkey'; columns: ['host_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+        ]
+      }
+      checkers_contest_players: {
+        Row: {
+          id: string
+          contest_id: string
+          user_id: string
+          seat: number
+          color: 'black' | 'white'
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          contest_id: string
+          user_id: string
+          seat: number
+          color: 'black' | 'white'
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          contest_id?: string
+          user_id?: string
+          seat?: number
+          color?: 'black' | 'white'
+          joined_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'checkers_contest_players_contest_id_fkey'; columns: ['contest_id']; referencedRelation: 'checkers_contests'; referencedColumns: ['id'] },
+          { foreignKeyName: 'checkers_contest_players_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+        ]
+      }
+      checkers_trial_usage: {
         Row: {
           id: string
           user_id: string
-          question_text: string
-          answer_hash: string
-          created_at: string
-          updated_at: string
+          variant: CheckersVariant
+          usage_date: string
+          match_count: number
         }
         Insert: {
           id?: string
           user_id: string
-          question_text: string
-          answer_hash: string
-          created_at?: string
-          updated_at?: string
+          variant: CheckersVariant
+          usage_date?: string
+          match_count?: number
         }
         Update: {
           id?: string
           user_id?: string
-          question_text?: string
-          answer_hash?: string
-          created_at?: string
-          updated_at?: string
+          variant?: CheckersVariant
+          usage_date?: string
+          match_count?: number
         }
         Relationships: [
-          {
-            foreignKeyName: 'security_questions_user_id_fkey'
-            columns: ['user_id']
-            isOneToOne: true
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      support_messages: {
-        Row: {
-          id: string
-          player_id: string
-          sender: SupportMessageSender
-          sender_id: string
-          body: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          player_id: string
-          sender: SupportMessageSender
-          sender_id: string
-          body: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          player_id?: string
-          sender?: SupportMessageSender
-          sender_id?: string
-          body?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'support_messages_player_id_fkey'
-            columns: ['player_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'support_messages_sender_id_fkey'
-            columns: ['sender_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
+          { foreignKeyName: 'checkers_trial_usage_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
     }
     Views: Record<string, never>
     Functions: {
-      hash_security_answer: {
-        Args: { answer: string }
-        Returns: string
+      is_admin: { Args: Record<string, never>; Returns: boolean }
+      host_checkers_contest: {
+        Args: {
+          p_host_id: string
+          p_variant: CheckersVariant
+          p_theme: CheckersTheme
+          p_entry_fee_cents: number
+        }
+        Returns: string   // contest UUID or 'err:...'
       }
-      get_security_question: {
-        Args: { p_email: string }
-        Returns: string | null
+      join_checkers_contest: {
+        Args: { p_contest_id: string; p_user_id: string }
+        Returns: string   // 'ok' | 'insufficient_funds' | 'already_full' | 'not_found' | 'trial_limit_reached'
       }
-      verify_security_answer: {
-        Args: { p_email: string; p_answer: string }
-        Returns: boolean
+      complete_checkers_contest: {
+        Args: { p_contest_id: string; p_winner_id: string | null }
+        Returns: void
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
+      get_checkers_trial_remaining: {
+        Args: { p_user_id: string; p_variant: CheckersVariant }
+        Returns: number
       }
-      is_approved_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_super_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      current_admin_role: {
-        Args: Record<PropertyKey, never>
-        Returns: AdminRole | null
-      }
-      has_admin_capability: {
-        Args: { p_capability: AdminCapability }
-        Returns: boolean
-      }
-      touch_presence: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      review_admin_request: {
-        Args: { p_user_id: string; p_decision: AdminStatus }
-        Returns: undefined
-      }
-      admin_set_role: {
-        Args: { p_user_id: string; p_role: 'player' | 'admin'; p_admin_role?: AdminRole | null }
-        Returns: undefined
-      }
-      admin_delete_user: {
-        Args: { p_user_id: string }
-        Returns: undefined
+      get_open_checkers_contests: {
+        Args: Record<string, never>
+        Returns: Array<{
+          id: string
+          host_username: string
+          variant: CheckersVariant
+          theme: CheckersTheme
+          entry_fee_cents: number
+          room_code: string
+          created_at: string
+        }>
       }
     }
+    Enums: {
+      user_role: 'player' | 'admin'
+      user_status: 'active' | 'suspended' | 'banned'
+      game_slug: GameSlug
+      match_status: MatchStatus
+      transaction_type: TransactionType
+      transaction_status: TransactionStatus
+      admin_role: AdminRole
+      admin_status: AdminStatus
+      checkers_variant: CheckersVariant
+      checkers_theme: CheckersTheme
+      contest_status: ContestStatus
+    }
+    CompositeTypes: Record<string, never>
   }
 }
