@@ -35,7 +35,10 @@ export class Renderer3D {
 
     // Scene
     this.scene  = new T.Scene();
-    this.camera = new T.PerspectiveCamera(45, this.canvas.clientWidth / this.canvas.clientHeight, 0.1, 100);
+    // Use a safe placeholder aspect (1) here — the real value is set
+    // right after by _resize(), which measures getBoundingClientRect()
+    // safely and guards against a momentary 0-height container.
+    this.camera = new T.PerspectiveCamera(45, 1, 0.1, 100);
     this.camera.position.set(0, 9, 8);
     this.camera.lookAt(0, 0, 0);
 
@@ -55,6 +58,25 @@ export class Renderer3D {
     // Raycaster
     this.raycaster = new T.Raycaster();
     this.mouse     = new T.Vector2();
+
+    // Now that the camera exists, force one more resize pass so its
+    // aspect ratio reflects the canvas's real size (the call at the top
+    // of _init() only had the renderer to size, since the camera didn't
+    // exist yet).
+    this._lastW = undefined;
+    this._lastH = undefined;
+    this._resize();
+
+    // Keep the canvas/camera in sync with its real on-screen size going
+    // forward. A single _resize() call at construction time isn't
+    // reliable on its own — flex/grid containers often report 0 or a
+    // stale size on first paint, which is what caused the squashed,
+    // zoomed-in board. ResizeObserver fixes this for layout changes;
+    // window 'resize' covers the popup window itself.
+    this._ro = new ResizeObserver(() => this._resize());
+    this._ro.observe(this.canvas);
+    this._onWindowResize = () => this._resize();
+    window.addEventListener('resize', this._onWindowResize);
 
     this._loop();
   }
@@ -465,8 +487,13 @@ export class Renderer3D {
   }
 
   _resize() {
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    if (w === this._lastW && h === this._lastH) return;
+    this._lastW = w;
+    this._lastH = h;
+
     this.renderer.setSize(w, h, false);
     if (this.camera) {
       this.camera.aspect = w / h;
@@ -478,6 +505,8 @@ export class Renderer3D {
 
   destroy() {
     cancelAnimationFrame(this._rafId);
+    if (this._ro) this._ro.disconnect();
+    if (this._onWindowResize) window.removeEventListener('resize', this._onWindowResize);
     this.renderer.dispose();
   }
 }
