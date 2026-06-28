@@ -4,7 +4,7 @@
 'use strict';
 
 import { RuleProcessor } from './RuleProcessor.js';
-import { EventBus } from './EventBus.js';
+import { EventBus } from './Modules.js';
 
 export class GameEngine {
   /**
