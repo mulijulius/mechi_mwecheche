@@ -278,6 +278,7 @@ export interface Database {
           pot_cents: number
           status: ContestStatus
           winner_id: string | null
+          forfeited_by: string | null
           room_code: string
           created_at: string
           booked_at: string | null
@@ -293,6 +294,7 @@ export interface Database {
           pot_cents?: number
           status?: ContestStatus
           winner_id?: string | null
+          forfeited_by?: string | null
           room_code?: string
           created_at?: string
           booked_at?: string | null
@@ -308,6 +310,7 @@ export interface Database {
           pot_cents?: number
           status?: ContestStatus
           winner_id?: string | null
+          forfeited_by?: string | null
           room_code?: string
           created_at?: string
           booked_at?: string | null
