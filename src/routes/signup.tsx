@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Loader2, UserPlus } from 'lucide-react'
+import { Loader2, ShieldCheck, UserPlus } from 'lucide-react'
 import { AuthLayout } from '#/components/layout/auth-layout'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -17,13 +17,19 @@ import {
   CUSTOM_QUESTION_VALUE,
   SECURITY_QUESTION_PRESETS,
 } from '#/lib/security-questions'
+import { ADMIN_ROLE_LABEL } from '#/lib/admin-permissions'
+import type { AdminRole } from '#/types/database.types'
 
 export const Route = createFileRoute('/signup')({
   component: SignUpPage,
 })
 
+const ADMIN_ROLE_OPTIONS: Array<AdminRole> = ['super_admin', 'support', 'finance_manager']
+
 function SignUpPage() {
   const navigate = useNavigate()
+  const [accountType, setAccountType] = React.useState<'player' | 'admin'>('player')
+  const [requestedAdminRole, setRequestedAdminRole] = React.useState<AdminRole | ''>('')
   const [fullName, setFullName] = React.useState('')
   const [username, setUsername] = React.useState('')
   const [email, setEmail] = React.useState('')
@@ -37,9 +43,11 @@ function SignUpPage() {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState(false)
+  const [pendingAdmin, setPendingAdmin] = React.useState(false)
 
   const isCustomQuestion = questionChoice === CUSTOM_QUESTION_VALUE
   const finalQuestionText = isCustomQuestion ? customQuestion.trim() : questionChoice
+  const isAdminSignup = accountType === 'admin'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -53,9 +61,19 @@ function SignUpPage() {
       setError('Please provide an answer to your security question.')
       return
     }
+    if (isAdminSignup && !requestedAdminRole) {
+      setError('Please choose which admin role you are requesting.')
+      return
+    }
 
     setIsSubmitting(true)
 
+    // Players are created exactly as before — no gating, no metadata about
+    // roles, free to register as many accounts as they like. An admin
+    // signup additionally passes requested_role/requested_admin_role,
+    // which the handle_new_user() trigger (0003_admin_roles.sql) reads to
+    // create the profile as role='admin' with admin_status='pending' —
+    // it cannot reach the admin console until a super admin approves it.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -64,6 +82,9 @@ function SignUpPage() {
           username,
           full_name: fullName,
           phone_number: phone,
+          ...(isAdminSignup
+            ? { requested_role: 'admin', requested_admin_role: requestedAdminRole }
+            : {}),
         },
       },
     })
@@ -77,7 +98,8 @@ function SignUpPage() {
     const userId = data.user?.id
 
     // Profile + wallet rows are created automatically by the
-    // handle_new_user() trigger defined in supabase/migrations/0001_init.sql.
+    // handle_new_user() trigger defined in supabase/migrations/0001_init.sql
+    // (updated in 0003_admin_roles.sql to also branch on requested_role).
     // The security question/answer is saved here, once we have a user id.
     // The answer is hashed server-side via hash_security_answer() — it is
     // never stored or transmitted in plaintext.
@@ -101,6 +123,16 @@ function SignUpPage() {
 
     setIsSubmitting(false)
 
+    if (isAdminSignup) {
+      // Admin accounts must wait for super-admin approval regardless of
+      // whether email confirmation is on, so we always sign them out and
+      // show the pending-review messaging rather than navigating in.
+      await supabase.auth.signOut()
+      setPendingAdmin(true)
+      setSuccess(true)
+      return
+    }
+
     if (data.session) {
       navigate({ to: '/dashboard' })
     } else {
@@ -112,17 +144,34 @@ function SignUpPage() {
   if (success) {
     return (
       <AuthLayout
-        eyebrow="Almost there"
-        title="Check your inbox."
-        description="Confirm your email to activate your account and wallet."
+        eyebrow={pendingAdmin ? 'Request received' : 'Almost there'}
+        title={pendingAdmin ? 'Awaiting approval.' : 'Check your inbox.'}
+        description={
+          pendingAdmin
+            ? 'A super admin needs to approve your admin account before you can sign in to the console.'
+            : 'Confirm your email to activate your account and wallet.'
+        }
       >
         <div className="rounded-lg border border-arena-emerald/30 bg-arena-emerald/10 p-5">
           <h2 className="mb-1 font-display text-lg font-semibold text-arena-text">
-            Confirmation email sent
+            {pendingAdmin ? 'Admin request submitted' : 'Confirmation email sent'}
           </h2>
           <p className="text-sm text-arena-text-dim">
-            We sent a confirmation link to <span className="text-arena-text">{email}</span>.
-            Once confirmed, sign in to enter the floor.
+            {pendingAdmin ? (
+              <>
+                Your request for{' '}
+                <span className="text-arena-text">
+                  {requestedAdminRole ? ADMIN_ROLE_LABEL[requestedAdminRole] : 'admin'}
+                </span>{' '}
+                access is waiting on a super admin to review it. You&rsquo;ll be able to sign in
+                to the admin console as soon as it&rsquo;s approved.
+              </>
+            ) : (
+              <>
+                We sent a confirmation link to <span className="text-arena-text">{email}</span>.
+                Once confirmed, sign in to enter the floor.
+              </>
+            )}
           </p>
         </div>
         <Link to="/signin" className="mt-6 inline-block text-sm font-medium text-arena-gold hover:underline">
@@ -149,6 +198,50 @@ function SignUpPage() {
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="accountType">Account type</Label>
+          <Select
+            value={accountType}
+            onValueChange={(v: string) => setAccountType(v as 'player' | 'admin')}
+          >
+            <SelectTrigger id="accountType">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="player">Player — join and play instantly</SelectItem>
+              <SelectItem value="admin">Admin — requires super admin approval</SelectItem>
+            </SelectContent>
+          </Select>
+          {isAdminSignup && (
+            <p className="mt-1 flex items-start gap-1.5 text-xs text-arena-text-dim">
+              <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-arena-gold" />
+              Admin accounts are reviewed by a super admin before they can sign in to the
+              console. Players never need approval and can register freely.
+            </p>
+          )}
+        </div>
+
+        {isAdminSignup && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="requestedAdminRole">Requested admin role</Label>
+            <Select
+              value={requestedAdminRole}
+              onValueChange={(v: string) => setRequestedAdminRole(v as AdminRole)}
+            >
+              <SelectTrigger id="requestedAdminRole">
+                <SelectValue placeholder="Choose a role" />
+              </SelectTrigger>
+              <SelectContent>
+                {ADMIN_ROLE_OPTIONS.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {ADMIN_ROLE_LABEL[role]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fullName">Full name</Label>
@@ -186,7 +279,7 @@ function SignUpPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="phone">M-Pesa phone number</Label>
+          <Label htmlFor="phone">{isAdminSignup ? 'Phone number' : 'M-Pesa phone number'}</Label>
           <Input
             id="phone"
             type="tel"
@@ -271,8 +364,14 @@ function SignUpPage() {
         )}
 
         <Button type="submit" size="lg" className="mt-2 w-full" disabled={isSubmitting}>
-          {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-          Create account
+          {isSubmitting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : isAdminSignup ? (
+            <ShieldCheck className="size-4" />
+          ) : (
+            <UserPlus className="size-4" />
+          )}
+          {isAdminSignup ? 'Request admin access' : 'Create account'}
         </Button>
 
         <p className="text-center text-xs text-arena-text-dim">
