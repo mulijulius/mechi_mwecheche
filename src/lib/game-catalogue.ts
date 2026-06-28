@@ -10,6 +10,8 @@ export interface GameMeta {
   accentVar: '--color-arena-gold' | '--color-arena-emerald' | '--color-arena-red'
   glyph: string
   image: string
+  /** If set, the "Play" button navigates here instead of showing "Coming soon". */
+  route?: string
 }
 
 export const GAME_CATALOGUE: Array<GameMeta> = [
@@ -34,6 +36,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     accentVar: '--color-arena-emerald',
     glyph: '⛀',
     image: '/games/1000080271.jpg',
+    route: '/dashboard/checkers',
   },
   {
     slug: 'chess',
