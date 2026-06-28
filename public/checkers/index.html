@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>3D Checkers — Multi-Variant</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  HOME SCREEN                                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen">
+  <div class="home-bg"></div>
+  <div class="home-content">
+
+    <header class="home-header">
+      <div class="logo-mark">♟</div>
+      <h1 class="logo-title">3D Checkers</h1>
+      <p class="logo-sub">Multi-Variant • 3D Rendered</p>
+    </header>
+
+    <div class="setup-card">
+
+      <!-- Player Names -->
+      <div class="player-setup">
+        <div class="player-input-wrap">
+          <div class="piece-icon piece-black"></div>
+          <input id="name-p2" class="name-input" type="text" placeholder="Dark Player" value="Player 2" maxlength="18" />
+        </div>
+        <span class="vs-badge">VS</span>
+        <div class="player-input-wrap">
+          <div class="piece-icon piece-white"></div>
+          <input id="name-p1" class="name-input" type="text" placeholder="Light Player" value="Player 1" maxlength="18" />
+        </div>
+      </div>
+
+      <!-- Variant -->
+      <div class="form-group">
+        <label class="form-label">GAME VARIANT</label>
+        <select id="game-type" class="form-select">
+          <option value="english">English Draughts (Standard 8×8)</option>
+          <option value="russian">Russian Checkers (Flying Kings)</option>
+        </select>
+      </div>
+
+      <!-- Rules desc -->
+      <p id="rules-desc" class="rules-desc">
+        English Draughts: diagonal forward movement, mandatory captures, kings move one step.
+      </p>
+
+      <!-- Theme picker -->
+      <div class="form-group">
+        <label class="form-label">BOARD THEME</label>
+        <div class="theme-row">
+          <button class="theme-btn active" data-theme="classic"  title="Classic Wood">
+            <span class="theme-swatch" style="background:linear-gradient(135deg,#DEB887 50%,#8B4513 50%)"></span>
+            <span>Classic</span>
+          </button>
+          <button class="theme-btn" data-theme="green"   title="Tournament Green">
+            <span class="theme-swatch" style="background:linear-gradient(135deg,#C8E6C9 50%,#388E3C 50%)"></span>
+            <span>Green</span>
+          </button>
+          <button class="theme-btn" data-theme="midnight" title="Midnight Blue">
+            <span class="theme-swatch" style="background:linear-gradient(135deg,#5C7FA8 50%,#1A2A4A 50%)"></span>
+            <span>Midnight</span>
+          </button>
+          <button class="theme-btn" data-theme="red"     title="Championship Red">
+            <span class="theme-swatch" style="background:linear-gradient(135deg,#FFCDD2 50%,#C62828 50%)"></span>
+            <span>Red</span>
+          </button>
+          <button class="theme-btn" data-theme="ivory"   title="Ivory &amp; Ebony">
+            <span class="theme-swatch" style="background:linear-gradient(135deg,#FFFde7 50%,#37474F 50%)"></span>
+            <span>Ivory</span>
+          </button>
+        </div>
+      </div>
+
+      <span id="trial-badge" class="badge badge-green">3 free matches remaining today</span>
+
+      <button id="btn-start" class="btn-primary btn-xl">
+        <span class="btn-icon">▶</span> Start Match
+      </button>
+
+      <button id="btn-rules" class="btn-ghost">How to Play</button>
+
+    </div><!-- /setup-card -->
+
+    <!-- Rules panel -->
+    <div id="rules-panel" class="rules-panel hidden">
+      <h3>How to Play</h3>
+      <ul>
+        <li><strong>Move:</strong> Click a piece to select it, then click a highlighted square to move.</li>
+        <li><strong>Capture:</strong> Jump over an opponent's piece to capture it. Captures are <em>mandatory</em>.</li>
+        <li><strong>Kings:</strong> Reach the far end to become a King (gold crown). Kings can move backwards.</li>
+        <li><strong>Russian variant:</strong> Kings "fly" along diagonals and can capture in any direction.</li>
+        <li><strong>Win:</strong> Capture all opponent pieces or leave them with no legal moves.</li>
+      </ul>
+    </div>
+
+  </div><!-- /home-content -->
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  GAME SCREEN                                           -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="screen-game" class="screen hidden">
+
+  <div class="game-layout">
+
+    <!-- Left sidebar: Player Black -->
+    <aside class="sidebar sidebar-left">
+      <div id="p2-card" class="player-card active-turn">
+        <div class="player-avatar player-avatar-black">♟</div>
+        <div class="player-info">
+          <div id="p2-name" class="player-name">Player 2</div>
+          <div class="piece-count-row">
+            <span class="piece-dot dot-black"></span>
+            <span id="p2-count" class="piece-count">12</span>
+          </div>
+          <div id="p2-wins" class="player-record">0W 0L</div>
+        </div>
+      </div>
+
+      <div class="sidebar-controls">
+        <button id="btn-undo" class="ctrl-btn" title="Undo">↩ Undo</button>
+        <button id="btn-resign" class="ctrl-btn ctrl-btn-danger" title="Resign">⚑ Resign</button>
+        <button id="btn-new" class="ctrl-btn" title="Main Menu">⌂ Menu</button>
+      </div>
+
+      <div class="cam-controls">
+        <label class="form-label" style="color:#aaa;font-size:10px">CAMERA</label>
+        <button class="cam-btn" data-angle="default">Default</button>
+        <button class="cam-btn" data-angle="top">Top</button>
+        <button class="cam-btn" data-angle="side">Side</button>
+      </div>
+    </aside>
+
+    <!-- Canvas wrapper -->
+    <main class="canvas-wrap">
+      <div id="turn-indicator" class="turn-indicator">Player 2's turn</div>
+      <canvas id="game-canvas"></canvas>
+    </main>
+
+    <!-- Right sidebar: Player White -->
+    <aside class="sidebar sidebar-right">
+      <div id="p1-card" class="player-card">
+        <div class="player-avatar player-avatar-white">♟</div>
+        <div class="player-info">
+          <div id="p1-name" class="player-name">Player 1</div>
+          <div class="piece-count-row">
+            <span class="piece-dot dot-white"></span>
+            <span id="p1-count" class="piece-count">12</span>
+          </div>
+          <div id="p1-wins" class="player-record">0W 0L</div>
+        </div>
+      </div>
+
+      <!-- Live theme switch in-game -->
+      <div class="in-game-themes">
+        <label class="form-label" style="color:#aaa;font-size:10px">THEME</label>
+        <button class="theme-btn active" data-theme="classic"   title="Classic">🪵</button>
+        <button class="theme-btn"        data-theme="green"     title="Green">🌿</button>
+        <button class="theme-btn"        data-theme="midnight"  title="Midnight">🌙</button>
+        <button class="theme-btn"        data-theme="red"       title="Red">🔴</button>
+        <button class="theme-btn"        data-theme="ivory"     title="Ivory">🤍</button>
+      </div>
+    </aside>
+
+  </div><!-- /game-layout -->
+
+</div><!-- /screen-game -->
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!--  RESULT MODAL                                         -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="result-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-confetti" aria-hidden="true">🎉</div>
+    <h2 id="result-title" class="modal-title">Player 1 Wins!</h2>
+    <p  id="result-sub"   class="modal-sub">by no pieces remaining</p>
+    <div id="result-stats" class="result-stats"></div>
+    <div class="modal-actions">
+      <button id="btn-play-again" class="btn-primary">▶ Play Again</button>
+      <button id="btn-main-menu"  class="btn-ghost">⌂ Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- Three.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- ES Module bootstrap -->
+<script type="module">
+  import { App } from './js/App.js';
+  window._app = new App();
+</script>
+
+</body>
+</html>
