@@ -1,19 +1,24 @@
 /**
  * src/routes/_authed/dashboard/checkers/$contestId.tsx
  *
- * Game room for a specific checkers contest. Mounts the vanilla-JS 3D engine
- * (checkers/index.html logic) inside a React iframe-like container using a
- * dedicated <canvas> and dynamic script import.
+ * Game room for a specific checkers contest.
  *
- * Architecture note: The 3D engine (Renderer3D, GameEngine, etc.) is vanilla
- * ES-module JS that expects a <canvas id="game-canvas"> in the DOM. We render
- * that canvas here and then dynamically import the engine bootstrap after the
- * canvas is in the DOM, passing contest metadata (variant, theme) down.
+ * The 3D board itself is NOT rendered inline anymore. Mounting the vanilla
+ * Three.js engine inside a flex/grid React layout was unreliable — the
+ * canvas's clientWidth/clientHeight could be measured before the layout
+ * settled, producing a squashed, zoomed-in board. Instead, once the contest
+ * is booked we open a dedicated static page (/checkers/play.html) in its own
+ * browser window, sized wide, which gets a clean full-viewport canvas and
+ * proper resize handling. Touch is supported there directly.
+ *
+ * This page keeps showing lobby-style state (waiting for opponent, room
+ * code, game over) and is responsible for opening/re-opening the board
+ * window.
  */
 
 import * as React from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Crown, Flag, RotateCcw } from 'lucide-react'
+import { ArrowLeft, ExternalLink, RotateCcw } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { supabase } from '#/utils/supabase'
@@ -37,6 +42,58 @@ export const Route = createFileRoute('/_authed/dashboard/checkers/$contestId')({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Build the URL for the standalone board popup, passing everything it
+ *  needs since it's a plain static page with no access to Vite env vars
+ *  or React context. */
+function buildPlayUrl(contestId: string, userId: string | undefined) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
+  const params = new URLSearchParams({
+    contestId,
+    supabaseUrl,
+    supabaseKey,
+    userId: userId ?? '',
+  })
+  return `/checkers/play.html?${params.toString()}`
+}
+
+/** Open the board in a new, wide window sized to be clearly visible,
+ *  centered on the user's screen. Falls back to a same-tab navigation
+ *  if the popup is blocked. */
+function openBoardWindow(contestId: string, userId: string | undefined) {
+  const url = buildPlayUrl(contestId, userId)
+
+  const width  = Math.min(1100, Math.round(window.screen.availWidth * 0.92))
+  const height = Math.min(850,  Math.round(window.screen.availHeight * 0.92))
+  const left   = Math.max(0, Math.round((window.screen.availWidth - width) / 2))
+  const top    = Math.max(0, Math.round((window.screen.availHeight - height) / 2))
+
+  const features = [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${left}`,
+    `top=${top}`,
+    'resizable=yes',
+    'scrollbars=no',
+    'status=no',
+    'toolbar=no',
+    'menubar=no',
+    'location=no',
+  ].join(',')
+
+  const win = window.open(url, `checkers-${contestId}`, features)
+
+  if (!win) {
+    // Popup blocked — fall back to opening in the current tab so the
+    // user isn't stuck with nothing happening.
+    window.location.href = url
+    return null
+  }
+
+  win.focus()
+  return win
+}
+
 function CheckersGameRoom() {
   const { contestId } = Route.useParams()
   const navigate = useNavigate()
@@ -45,11 +102,10 @@ function CheckersGameRoom() {
   const [contest, setContest] = React.useState<ContestRow | null>(null)
   const [players, setPlayers] = React.useState<ContestPlayer[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [engineReady, setEngineReady] = React.useState(false)
   const [gameOver, setGameOver] = React.useState<{ winner: string | null; reason: string } | null>(null)
 
-  const canvasRef = React.useRef<HTMLCanvasElement>(null)
-  const engineRef = React.useRef<any>(null)   // holds the App instance
+  const boardWindowRef = React.useRef<Window | null>(null)
+  const hasAutoOpenedRef = React.useRef(false)
 
   // ── Load contest data ────────────────────────────────────────────────────
 
@@ -79,7 +135,7 @@ function CheckersGameRoom() {
     return () => { isMounted = false }
   }, [contestId])
 
-  // ── Realtime: watch for second player joining ─────────────────────────────
+  // ── Realtime: watch for second player joining / contest completion ───────
 
   React.useEffect(() => {
     const channel = supabase
@@ -117,77 +173,48 @@ function CheckersGameRoom() {
     return () => { supabase.removeChannel(channel) }
   }, [contestId])
 
-  // ── Mount 3D engine once contest is booked and canvas is rendered ─────────
+  // ── Auto-open the board window once both seats are filled ────────────────
+  // Browsers generally only allow window.open() without it being blocked
+  // when it happens as a direct result of a user gesture (a click). A
+  // contest flipping to "booked" via realtime is NOT a click, so this
+  // auto-open will be blocked by most browsers' popup blockers the first
+  // time. That's why we also render a manual "Open Board" button below —
+  // it's the reliable path. The auto-open is just a nice-to-have for
+  // browsers that allow it.
 
   React.useEffect(() => {
-    if (!contest || contest.status !== 'booked' || !canvasRef.current || engineReady) return
+    if (!contest || contest.status === 'open' || hasAutoOpenedRef.current) return
+    hasAutoOpenedRef.current = true
+    const win = openBoardWindow(contestId, user?.id)
+    boardWindowRef.current = win
+  }, [contest, contestId, user?.id])
 
-    const myPlayer = players.find((p) => p.user_id === user?.id)
-    const opponent = players.find((p) => p.user_id !== user?.id)
+  // ── Manual open / re-open ────────────────────────────────────────────────
 
-    // Dynamically import the vanilla engine. The checkers/ folder is served
-    // as static assets from /checkers/ in vite.config.ts (see publicDir note).
-    // We use postMessage to bridge React state ↔ engine events.
-    async function mountEngine() {
-      // Import the compiled modules from the static /checkers/js/ folder
-      const [{ GameEngine }, { Renderer3D }, { ThemeManager, THEMES, PlayerProfile }] =
-        await Promise.all([
-          import('/checkers/js/GameEngine.js'),
-          import('/checkers/js/Renderer3D.js'),
-          import('/checkers/js/Modules.js'),
-        ])
-
-      const theme = { id: contest!.variant === 'english' ? 'classic' : contest!.theme, ...THEMES[contest!.theme] }
-
-      const p1 = new PlayerProfile(myPlayer?.user_id ?? 'me', myPlayer?.profiles?.username ?? 'You')
-      const p2 = new PlayerProfile(opponent?.user_id ?? 'opp', opponent?.profiles?.username ?? 'Opponent')
-
-      const engine = new GameEngine({
-        gameType: contest!.variant,
-        boardSize: 8,
-        themePreset: contest!.theme,
-        players: {
-          black: myPlayer?.color === 'black' ? p1 : p2,
-          white: myPlayer?.color === 'white' ? p1 : p2,
-        },
-      })
-
-      const renderer = new Renderer3D(canvasRef.current!, theme)
-      engineRef.current = { engine, renderer }
-
-      // Wire events
-      engine.bus.on('game:start', (snap: any) => renderer.syncPieces(snap.board))
-      engine.bus.on('game:turn',  (data: any) => renderer.syncPieces(data.board))
-      engine.bus.on('game:undo',  (snap: any) => renderer.syncPieces(snap.board))
-      engine.bus.on('game:over',  (data: any) => {
-        setGameOver({ winner: data.winner, reason: data.reason })
-        // Mark contest complete in DB (only the winner's client should do this,
-        // but we gate inside complete_checkers_contest so both can safely call it)
-        const winnerId = data.winner
-          ? (data.winner === myPlayer?.color ? myPlayer?.user_id : opponent?.user_id) ?? null
-          : null
-        supabase.rpc('complete_checkers_contest', {
-          p_contest_id: contestId,
-          p_winner_id: winnerId,
-        })
-      })
-
-      engine.startGame()
-      setEngineReady(true)
+  function handleOpenBoard() {
+    // If we already have a reference to a still-open window, just refocus it
+    // instead of spawning a duplicate.
+    if (boardWindowRef.current && !boardWindowRef.current.closed) {
+      boardWindowRef.current.focus()
+      return
     }
-
-    mountEngine().catch(console.error)
-  }, [contest, players, engineReady, user?.id, contestId])
-
-  // ── Canvas click forwarding ───────────────────────────────────────────────
-
-  function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    // The engine's pick() works on raw DOM events; we delegate via the
-    // canvas ref so the engine uses real coordinates.
-    if (!engineRef.current) return
-    // Engine handles its own click binding via Renderer3D.pick() —
-    // no action needed here; the canvas DOM event bubbles to the engine.
+    boardWindowRef.current = openBoardWindow(contestId, user?.id)
   }
+
+  // ── Detect game-over reported back via the contests row ──────────────────
+  // The popup writes the result straight to Supabase via complete_checkers_contest,
+  // so we just watch the contests row for status -> 'completed' to know it ended.
+
+  React.useEffect(() => {
+    if (contest?.status === 'completed' && !gameOver) {
+      const myColor = players.find(p => p.user_id === user?.id)?.color ?? null
+      const oppColor = players.find(p => p.user_id !== user?.id)?.color ?? null
+      const winnerColor = contest.winner_id
+        ? (contest.winner_id === user?.id ? myColor : oppColor)
+        : null
+      setGameOver({ winner: winnerColor, reason: 'game-over' })
+    }
+  }, [contest, gameOver, players, user?.id])
 
   // ── Loading / waiting states ─────────────────────────────────────────────
 
@@ -263,7 +290,7 @@ function CheckersGameRoom() {
           )}
         </div>
 
-        {/* Game canvas */}
+        {/* Where the board used to render inline — now just status + open button */}
         <div className="relative flex flex-1 items-center justify-center bg-arena-bg">
           {contest.status === 'open' ? (
             <WaitingOverlay roomCode={contest.room_code} />
@@ -274,13 +301,7 @@ function CheckersGameRoom() {
               onPlayAgain={() => navigate({ to: '/dashboard/checkers' })}
             />
           ) : (
-            <canvas
-              ref={canvasRef}
-              id="game-canvas"
-              className="block"
-              style={{ width: '100%', height: '100%', maxHeight: 'calc(100vh - 120px)' }}
-              onClick={handleCanvasClick}
-            />
+            <OpenBoardPrompt onOpen={handleOpenBoard} />
           )}
         </div>
       </div>
@@ -322,6 +343,26 @@ function WaitingOverlay({ roomCode }: { roomCode: string }) {
         <p className="mt-1 text-sm text-arena-text-dim">Share your room code</p>
         <p className="mt-2 font-mono text-2xl font-bold tracking-[0.3em] text-arena-gold">{roomCode}</p>
       </div>
+    </div>
+  )
+}
+
+function OpenBoardPrompt({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-4 text-center">
+      <div>
+        <p className="font-display text-lg font-semibold text-arena-text">Your match is ready</p>
+        <p className="mt-1 text-sm text-arena-text-dim">
+          The board opens in its own window so it's large and easy to play on touch.
+        </p>
+      </div>
+      <Button onClick={onOpen} className="gap-2" size="lg">
+        <ExternalLink className="size-4" />
+        Open Board
+      </Button>
+      <p className="text-xs text-arena-text-dim">
+        If nothing opens, your browser may have blocked the popup — tap the button again, or allow popups for this site.
+      </p>
     </div>
   )
 }
