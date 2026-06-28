@@ -201,14 +201,14 @@
 
   <div id="toast"></div>
 
-  <!-- Three.js (r128) — required globally as window.THREE -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Three.js was removed when the board moved from 3D to flat 2D Canvas
+       rendering — Renderer2D.js needs no external 3D library. -->
   <!-- Supabase JS UMD build, so this static page can talk to the DB directly -->
   <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
   <script type="module">
     import { GameEngine } from './js/GameEngine.js';
-    import { Renderer3D } from './js/Renderer3D.js';
+    import { Renderer2D } from './js/Renderer2D.js';
     import { THEMES } from './js/Modules.js';
 
     // ── Read config from the URL the opener window built for us ──────────
@@ -419,7 +419,7 @@
         players: { black: null, white: null },
       });
 
-      renderer = new Renderer3D(canvas, theme);
+      renderer = new Renderer2D(canvas, theme);
 
       // NOTE: we intentionally do NOT drive the rendered board off
       // engine.bus events here. The engine is used purely as a local rules
@@ -469,19 +469,55 @@
     // load) onto the local renderer and rules engine. This is the single
     // place that makes an opponent's move actually appear on screen.
     function applyServerState(updatedContest) {
-      if (!engine || !renderer) return;
-      if (!updatedContest.board_state) return;
+      console.log('[checkers] applyServerState called', {
+        hasEngine: !!engine,
+        hasRenderer: !!renderer,
+        board_state_type: typeof updatedContest.board_state,
+        turn: updatedContest.turn,
+        move_count: updatedContest.move_count,
+      });
 
-      engine.board = updatedContest.board_state;
-      engine.turn  = updatedContest.turn || 'black';
-      engine.moveCount = updatedContest.move_count || 0;
-      engine.status = 'playing';
+      if (!engine || !renderer) {
+        console.warn('[checkers] applyServerState bailed: engine or renderer not mounted yet');
+        return;
+      }
+      if (!updatedContest.board_state) {
+        console.warn('[checkers] applyServerState bailed: board_state is falsy', updatedContest.board_state);
+        return;
+      }
 
-      renderer.syncPieces(engine.board);
-      renderTurn(engine.turn);
-      renderer.clearSelection();
-      selected = null;
-      moveInFlight = false;
+      // Defensive: some client/transport combinations can deliver jsonb
+      // columns as a raw string instead of a parsed object. If that's
+      // happening, board.length below would be a character count instead
+      // of 8, and syncPieces would silently iterate garbage. Parse
+      // defensively so we either get a working board or a loud error
+      // instead of a quietly broken one.
+      let board = updatedContest.board_state;
+      if (typeof board === 'string') {
+        console.warn('[checkers] board_state arrived as a string, parsing JSON');
+        try {
+          board = JSON.parse(board);
+        } catch (e) {
+          console.error('[checkers] failed to parse board_state string', e);
+          return;
+        }
+      }
+
+      try {
+        engine.board = board;
+        engine.turn  = updatedContest.turn || 'black';
+        engine.moveCount = updatedContest.move_count || 0;
+        engine.status = 'playing';
+
+        renderer.syncPieces(engine.board);
+        renderTurn(engine.turn);
+        renderer.clearSelection();
+        selected = null;
+        moveInFlight = false;
+        console.log('[checkers] applyServerState applied successfully, turn is now', engine.turn);
+      } catch (e) {
+        console.error('[checkers] applyServerState threw while applying board', e);
+      }
     }
 
     function handleGameOver(data) {
@@ -571,6 +607,8 @@
         winnerId = engine.winner === myPlayer?.color ? myPlayer?.user_id : oppPlayer?.user_id;
       }
 
+      console.log('[checkers] submitting move via RPC', { from, to, turnAfter, moveCountAfter, isGameOver });
+
       const { data, error } = await supabase.rpc('make_checkers_move', {
         p_contest_id: contestId,
         p_user_id: myUserId,
@@ -586,13 +624,15 @@
         // Re-load the authoritative contest row and snap back to it
         // instead of leaving the player stuck on a board that diverged
         // from the server.
-        console.error('make_checkers_move failed', error, data);
+        console.error('[checkers] make_checkers_move failed', error, data);
         toast(data === 'not_your_turn' ? "It's not your turn" : 'Move failed — syncing…');
         await loadContestAndPlayers();
         if (contest.board_state) applyServerState(contest);
         moveInFlight = false;
         return;
       }
+
+      console.log('[checkers] make_checkers_move succeeded', data);
 
       if (isGameOver) handleGameOver({ winner: engine.winner, reason: overReason });
       // moveInFlight is cleared by applyServerState() once our own realtime
@@ -624,66 +664,77 @@
     }, { passive: false });
 
     // ── Realtime updates ──────────────────────────────────────────────
+    console.log('[checkers] subscribing to contest-room-' + contestId, 'as user', myUserId);
+
     const channel = supabase
       .channel(`contest-room-${contestId}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'checkers_contests', filter: `id=eq.${contestId}` },
         async (payload) => {
-          contest = payload.new;
-          renderHeader();
+          console.log('[checkers] realtime UPDATE received', payload.new);
+          try {
+            contest = payload.new;
+            renderHeader();
 
-          // Someone left. If it wasn't me, surface a clear message —
-          // this fires even if I'm mid-game, so stop the board from
-          // accepting further input.
-          if (contest.forfeited_by && contest.forfeited_by !== myUserId && !hasLeftOrEnded) {
-            hasLeftOrEnded = true;
-            if (engine) engine.status = 'ended'; // stop accepting picks
-            if (contest.status === 'cancelled') {
-              showOverlay('Match cancelled', 'The host left before the match started.', true);
-            } else {
+            // Someone left. If it wasn't me, surface a clear message —
+            // this fires even if I'm mid-game, so stop the board from
+            // accepting further input.
+            if (contest.forfeited_by && contest.forfeited_by !== myUserId && !hasLeftOrEnded) {
+              hasLeftOrEnded = true;
+              if (engine) engine.status = 'ended'; // stop accepting picks
+              if (contest.status === 'cancelled') {
+                showOverlay('Match cancelled', 'The host left before the match started.', true);
+              } else {
+                const iWon = contest.winner_id === myUserId;
+                showOverlay(
+                  iWon ? 'Opponent left — you win! 🏆' : 'Match ended',
+                  iWon ? 'The pot has been credited to your wallet.' : 'Your opponent forfeited the match.',
+                  true,
+                );
+              }
+              return;
+            }
+
+            // Normal game-over via complete_checkers_contest (not a forfeit) —
+            // this is the realtime path for the player who did NOT just make
+            // the winning move locally (they already showed the overlay
+            // themselves inside submitMove's handleGameOver call).
+            if (contest.status === 'completed' && !hasLeftOrEnded) {
+              hasLeftOrEnded = true;
+              if (engine) engine.status = 'ended';
+              if (contest.board_state) {
+                renderer?.syncPieces(contest.board_state);
+              }
               const iWon = contest.winner_id === myUserId;
+              const isDraw = !contest.winner_id;
               showOverlay(
-                iWon ? 'Opponent left — you win! 🏆' : 'Match ended',
-                iWon ? 'The pot has been credited to your wallet.' : 'Your opponent forfeited the match.',
+                isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
+                '',
                 true,
               );
+              return;
             }
-            return;
-          }
 
-          // Normal game-over via complete_checkers_contest (not a forfeit) —
-          // this is the realtime path for the player who did NOT just make
-          // the winning move locally (they already showed the overlay
-          // themselves inside submitMove's handleGameOver call).
-          if (contest.status === 'completed' && !hasLeftOrEnded) {
-            hasLeftOrEnded = true;
-            if (engine) engine.status = 'ended';
-            if (contest.board_state) {
-              renderer?.syncPieces(contest.board_state);
+            if (contest.status === 'open' || contest.status === 'cancelled' || contest.status === 'completed') {
+              console.log('[checkers] UPDATE ignored, status is', contest.status);
+              return;
             }
-            const iWon = contest.winner_id === myUserId;
-            const isDraw = !contest.winner_id;
-            showOverlay(
-              isDraw ? "It's a draw!" : iWon ? 'You win! 🏆' : 'You lose',
-              '',
-              true,
-            );
-            return;
-          }
 
-          if (contest.status === 'open' || contest.status === 'cancelled' || contest.status === 'completed') return;
-
-          if (!engine) {
-            // First transition into booked/in_progress for this tab.
-            await loadContestAndPlayers();
-            renderHeader();
-            mountEngine();
-          } else {
-            // Engine already mounted — this UPDATE is a move (ours or the
-            // opponent's). Apply the server's board/turn directly; this is
-            // the line that actually fixes moves not showing up on the
-            // other player's screen.
-            applyServerState(contest);
+            if (!engine) {
+              // First transition into booked/in_progress for this tab.
+              console.log('[checkers] engine not mounted yet, mounting now');
+              await loadContestAndPlayers();
+              renderHeader();
+              mountEngine();
+            } else {
+              // Engine already mounted — this UPDATE is a move (ours or the
+              // opponent's). Apply the server's board/turn directly; this is
+              // the line that actually fixes moves not showing up on the
+              // other player's screen.
+              applyServerState(contest);
+            }
+          } catch (e) {
+            console.error('[checkers] realtime UPDATE handler threw', e);
           }
         })
       .on('postgres_changes',
@@ -693,7 +744,13 @@
           renderHeader();
           mountEngine();
         })
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('[checkers] realtime channel status:', status, err || '');
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.error('[checkers] realtime subscription problem — moves will not sync:', status, err);
+          toast('Connection issue — moves may not sync. Try reloading.');
+        }
+      });
 
     window.addEventListener('beforeunload', () => {
       supabase.removeChannel(channel);
