@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '#/utils/supabase'
 import { adminCan } from '#/lib/admin-permissions'
@@ -124,9 +125,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session?.user.id])
 
+  const navigate = useNavigate()
+
   const signOut = React.useCallback(async () => {
     await supabase.auth.signOut()
-  }, [])
+    // Clearing the session alone doesn't move the user off whatever
+    // protected page they were on — _authed.tsx's beforeLoad guard only
+    // re-runs on navigation, not reactively. Without this, sign-out
+    // appeared to "do nothing" until a manual refresh (which then 404'd
+    // on Vercel for an unrelated, separate reason — see vercel.json).
+    navigate({ to: '/signin' })
+  }, [navigate])
 
   const isApprovedAdmin = profile?.role === 'admin' && profile.admin_status === 'approved'
   const isSuperAdmin = isApprovedAdmin && profile?.admin_role === 'super_admin'
