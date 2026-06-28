@@ -34,6 +34,16 @@ export type CheckersTheme = 'classic' | 'green' | 'midnight' | 'red' | 'ivory'
 export type ContestStatus = 'open' | 'booked' | 'in_progress' | 'completed' | 'cancelled'
 
 /**
+ * Mirrors the board shape produced by RuleProcessor.initialBoard() in
+ * public/checkers/js/RuleProcessor.js — an 8x8 row-major grid of either a
+ * piece or null. Persisted as jsonb on checkers_contests.board_state so both
+ * players' clients can render the exact same authoritative state
+ * (0006_checkers_move_sync.sql).
+ */
+export type CheckersSquare = { color: 'black' | 'white'; king: boolean } | null
+export type CheckersBoard = CheckersSquare[][]
+
+/**
  * Single source of truth for what each admin sub-role can do, mirrored from
  * the has_admin_capability() Postgres function in 0003_admin_roles.sql.
  */
@@ -280,6 +290,9 @@ export interface Database {
           winner_id: string | null
           forfeited_by: string | null
           room_code: string
+          board_state: CheckersBoard | null
+          turn: 'black' | 'white' | null
+          move_count: number
           created_at: string
           booked_at: string | null
           started_at: string | null
@@ -296,6 +309,9 @@ export interface Database {
           winner_id?: string | null
           forfeited_by?: string | null
           room_code?: string
+          board_state?: CheckersBoard | null
+          turn?: 'black' | 'white' | null
+          move_count?: number
           created_at?: string
           booked_at?: string | null
           started_at?: string | null
@@ -312,6 +328,9 @@ export interface Database {
           winner_id?: string | null
           forfeited_by?: string | null
           room_code?: string
+          board_state?: CheckersBoard | null
+          turn?: 'black' | 'white' | null
+          move_count?: number
           created_at?: string
           booked_at?: string | null
           started_at?: string | null
@@ -397,6 +416,28 @@ export interface Database {
       complete_checkers_contest: {
         Args: { p_contest_id: string; p_winner_id: string | null }
         Returns: void
+      }
+      make_checkers_move: {
+        Args: {
+          p_contest_id: string
+          p_user_id: string
+          p_board_state: CheckersBoard
+          p_turn: 'black' | 'white'
+          p_move_count: number
+          p_game_over?: boolean
+          p_winner_id?: string | null
+        }
+        Returns: string   // 'ok' | 'not_found' | 'not_a_player' | 'not_in_progress' | 'not_your_turn'
+      }
+      seed_checkers_board: {
+        Args: {
+          p_contest_id: string
+          p_user_id: string
+          p_board_state: CheckersBoard
+          p_turn: 'black' | 'white'
+          p_move_count: number
+        }
+        Returns: string   // 'ok' | 'already_seeded' | 'not_found' | 'not_a_player' | 'not_in_progress'
       }
       get_checkers_trial_remaining: {
         Args: { p_user_id: string; p_variant: CheckersVariant }
