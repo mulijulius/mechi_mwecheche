@@ -12,6 +12,10 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- Three.js (r128) — required globally as window.THREE by the
+         vanilla checkers 3D engine (public/checkers/js/Renderer3D.js).
+         Must load BEFORE the engine's dynamic import() runs. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
