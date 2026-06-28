@@ -1,5 +1,7 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { Sidebar } from '#/components/layout/sidebar'
+import { SidebarProvider, useSidebar } from '#/lib/sidebar-context'
+import { cn } from '#/lib/utils'
 import { supabase } from '#/utils/supabase'
 
 export const Route = createFileRoute('/_authed/admin')({
@@ -37,9 +39,28 @@ export const Route = createFileRoute('/_authed/admin')({
 
 function AdminLayout() {
   return (
+    <SidebarProvider>
+      <AdminLayoutContent />
+    </SidebarProvider>
+  )
+}
+
+function AdminLayoutContent() {
+  const { isOpen } = useSidebar()
+
+  return (
     <div className="flex bg-arena-bg">
       <Sidebar variant="admin" />
-      <main className="flex-1 p-6">
+      <main
+        className={cn(
+          'min-w-0 flex-1 p-6 pt-20',
+          // The floating hamburger only needs clearance reserved when
+          // it's actually visible — i.e. whenever the sidebar is closed,
+          // at any screen width, not just below lg.
+          !isOpen && 'lg:pt-20',
+          isOpen && 'lg:pt-6',
+        )}
+      >
         <Outlet />
       </main>
     </div>
