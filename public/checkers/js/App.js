@@ -4,7 +4,7 @@
 'use strict';
 
 import { GameEngine }   from './GameEngine.js';
-import { Renderer3D }   from './Renderer3D.js';
+import { Renderer2D }   from './Renderer2D.js';
 import { ThemeManager, THEMES } from './Modules.js';
 import { PlayerProfile, TrialManager } from './Modules.js';
 
@@ -36,13 +36,6 @@ export class App {
     // Theme buttons
     document.querySelectorAll('.theme-btn').forEach(btn => {
       btn.addEventListener('click', () => this._applyTheme(btn.dataset.theme));
-    });
-
-    // Camera buttons
-    document.querySelectorAll('.cam-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (this._renderer) this._renderer.setCameraAngle(btn.dataset.angle);
-      });
     });
 
     // Game type selector
@@ -99,7 +92,7 @@ export class App {
 
     requestAnimationFrame(() => {
       const canvas = document.getElementById('game-canvas');
-      this._renderer = new Renderer3D(canvas, theme);
+      this._renderer = new Renderer2D(canvas, theme);
       this._wireEngineEvents();
       this._engine.startGame();
       TrialManager.recordMatch();
