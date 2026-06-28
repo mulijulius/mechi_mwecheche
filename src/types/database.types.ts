@@ -1,4 +1,5 @@
-// Generated to match supabase/migrations/0001_init.sql and 0002_security_questions.sql
+// Generated to match supabase/migrations/0001_init.sql, 0002_security_questions.sql
+// and 0003_admin_roles.sql.
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
 
 export type GameSlug = 'ludo' | 'checkers' | 'chess' | 'billiards' | 'solitaire'
@@ -13,6 +14,29 @@ export type MatchStatus =
 export type TransactionType = 'deposit' | 'withdrawal' | 'stake' | 'payout' | 'refund'
 
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'reversed'
+
+/** Sub-role for admin accounts only. Always null on player profiles. */
+export type AdminRole = 'super_admin' | 'support' | 'finance_manager'
+
+/** Approval lifecycle for admin accounts only. Always null on player profiles. */
+export type AdminStatus = 'pending' | 'approved' | 'rejected'
+
+export type SupportMessageSender = 'player' | 'admin'
+
+/**
+ * Single source of truth for what each admin sub-role can do, mirrored from
+ * the has_admin_capability() Postgres function in 0003_admin_roles.sql.
+ * Kept here (rather than only in #/lib/admin-permissions.ts) so the type of
+ * a capability key is shared with the RPC call sites.
+ */
+export type AdminCapability =
+  | 'manage_users'
+  | 'approve_admins'
+  | 'financial_records'
+  | 'withdraw_funds'
+  | 'statistics'
+  | 'presence'
+  | 'player_chat'
 
 export interface Database {
   __InternalSupabase: {
@@ -29,6 +53,9 @@ export interface Database {
           avatar_url: string | null
           role: 'player' | 'admin'
           status: 'active' | 'suspended' | 'banned'
+          admin_role: AdminRole | null
+          admin_status: AdminStatus | null
+          last_seen_at: string
           created_at: string
           updated_at: string
         }
@@ -40,6 +67,9 @@ export interface Database {
           avatar_url?: string | null
           role?: 'player' | 'admin'
           status?: 'active' | 'suspended' | 'banned'
+          admin_role?: AdminRole | null
+          admin_status?: AdminStatus | null
+          last_seen_at?: string
           created_at?: string
           updated_at?: string
         }
@@ -51,6 +81,9 @@ export interface Database {
           avatar_url?: string | null
           role?: 'player' | 'admin'
           status?: 'active' | 'suspended' | 'banned'
+          admin_role?: AdminRole | null
+          admin_status?: AdminStatus | null
+          last_seen_at?: string
           created_at?: string
           updated_at?: string
         }
@@ -313,6 +346,48 @@ export interface Database {
           },
         ]
       }
+      support_messages: {
+        Row: {
+          id: string
+          player_id: string
+          sender: SupportMessageSender
+          sender_id: string
+          body: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          player_id: string
+          sender: SupportMessageSender
+          sender_id: string
+          body: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          player_id?: string
+          sender?: SupportMessageSender
+          sender_id?: string
+          body?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'support_messages_player_id_fkey'
+            columns: ['player_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'support_messages_sender_id_fkey'
+            columns: ['sender_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -327,6 +402,42 @@ export interface Database {
       verify_security_answer: {
         Args: { p_email: string; p_answer: string }
         Returns: boolean
+      }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_approved_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_super_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      current_admin_role: {
+        Args: Record<PropertyKey, never>
+        Returns: AdminRole | null
+      }
+      has_admin_capability: {
+        Args: { p_capability: AdminCapability }
+        Returns: boolean
+      }
+      touch_presence: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      review_admin_request: {
+        Args: { p_user_id: string; p_decision: AdminStatus }
+        Returns: undefined
+      }
+      admin_set_role: {
+        Args: { p_user_id: string; p_role: 'player' | 'admin'; p_admin_role?: AdminRole | null }
+        Returns: undefined
+      }
+      admin_delete_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
     }
   }
