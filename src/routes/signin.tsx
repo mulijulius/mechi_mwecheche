@@ -23,19 +23,27 @@ function SignInPage() {
     setError(null)
     setIsSubmitting(true)
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    setIsSubmitting(false)
-
     if (signInError) {
+      setIsSubmitting(false)
       setError(signInError.message)
       return
     }
 
-    navigate({ to: '/dashboard' })
+    // Route admins to the admin console (which itself redirects to the
+    // pending-review screen if they aren't approved yet) and players to
+    // their dashboard, same as before.
+    const userId = signInData.user?.id
+    const { data: profile } = userId
+      ? await supabase.from('profiles').select('role').eq('id', userId).single()
+      : { data: null }
+
+    setIsSubmitting(false)
+    navigate({ to: profile?.role === 'admin' ? '/admin' : '/dashboard' })
   }
 
   return (
