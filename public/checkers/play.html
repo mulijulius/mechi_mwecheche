@@ -39,6 +39,11 @@
     font-size: 0.8rem; cursor: pointer;
   }
   #topbar button:hover { background: rgba(255,255,255,0.16); }
+  #topbar button.danger {
+    border-color: rgba(229,57,53,0.45); color: #FF8A80;
+    background: rgba(229,57,53,0.12);
+  }
+  #topbar button.danger:hover { background: rgba(229,57,53,0.22); }
   #room-code { font-family: monospace; color: var(--gold); font-weight: 700; }
   .pill {
     font-size: 0.72rem; padding: 3px 9px; border-radius: 999px;
@@ -110,6 +115,33 @@
     border-radius: 10px; padding: 10px 22px; font-weight: 700;
     font-size: 0.9rem; cursor: pointer;
   }
+
+  #confirm-overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.75);
+    z-index: 35;
+    text-align: center;
+    padding: 24px;
+  }
+  #confirm-overlay.show { display: flex; }
+  #confirm-overlay .card {
+    background: linear-gradient(160deg, #2a1010 0%, #1a0a0a 100%);
+    border: 1px solid rgba(255,138,128,0.35);
+    border-radius: 18px; padding: 26px 28px;
+    max-width: 340px; width: 100%;
+  }
+  #confirm-overlay h2 { color: #FF8A80; font-size: 1.2rem; margin-bottom: 8px; }
+  #confirm-overlay p { color: var(--text-muted); font-size: 0.86rem; margin-bottom: 18px; }
+  #confirm-overlay button.ghost {
+    background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px; padding: 10px 18px; font-size: 0.88rem; cursor: pointer;
+  }
+  #confirm-overlay button.danger-solid {
+    background: #e53935; color: #fff; border: none;
+    border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 0.88rem; cursor: pointer;
+  }
   .spinner {
     width: 36px; height: 36px; margin: 0 auto 14px;
     border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold);
@@ -131,6 +163,7 @@
 
   <div id="topbar">
     <button id="btn-lobby">← Lobby</button>
+    <button id="btn-leave" class="danger">Leave Match</button>
     <span id="room-code">—</span>
     <span id="variant-pill" class="pill">—</span>
     <span id="status-pill" class="pill pill-wait">Connecting…</span>
@@ -155,6 +188,17 @@
     </div>
   </div>
 
+  <div id="confirm-overlay">
+    <div class="card">
+      <h2 id="confirm-title">Leave this match?</h2>
+      <p id="confirm-sub">Your opponent will win and take the pot. This can't be undone.</p>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button id="confirm-cancel" class="ghost">Stay</button>
+        <button id="confirm-ok" class="danger-solid">Leave Match</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <!-- Three.js (r128) — required globally as window.THREE -->
@@ -173,16 +217,24 @@
     const supabaseUrl  = params.get('supabaseUrl');
     const supabaseKey  = params.get('supabaseKey');
     const myUserId     = params.get('userId');
+    const lobbyUrl     = params.get('lobbyUrl') || '/dashboard/checkers';
 
     const $ = (sel) => document.querySelector(sel);
-    const overlay     = $('#overlay');
-    const overlaySub  = $('#overlay-sub');
-    const statusPill  = $('#status-pill');
-    const turnPill    = $('#turn-pill');
-    const roomCodeEl  = $('#room-code');
-    const variantPill = $('#variant-pill');
-    const toastEl     = $('#toast');
-    const canvas      = $('#game-canvas');
+    const overlay        = $('#overlay');
+    const overlaySub     = $('#overlay-sub');
+    const confirmOverlay = $('#confirm-overlay');
+    const confirmTitle   = $('#confirm-title');
+    const confirmSub     = $('#confirm-sub');
+    const statusPill     = $('#status-pill');
+    const turnPill       = $('#turn-pill');
+    const roomCodeEl     = $('#room-code');
+    const variantPill    = $('#variant-pill');
+    const toastEl        = $('#toast');
+    const canvas         = $('#game-canvas');
+    const btnLobby       = $('#btn-lobby');
+    const btnLeave       = $('#btn-leave');
+
+    let hasLeftOrEnded = false; // guards against double-firing leave logic
 
     function toast(msg) {
       toastEl.textContent = msg;
@@ -198,14 +250,22 @@
       if (withCloseButton) {
         const btn = document.createElement('button');
         btn.textContent = 'Back to Lobby';
-        btn.onclick = () => window.close();
+        btn.onclick = () => goToLobby();
         overlay.querySelector('.card').appendChild(btn);
       }
       overlay.classList.add('show');
     }
     function hideOverlay() { overlay.classList.remove('show'); }
 
-    $('#btn-lobby').addEventListener('click', () => window.close());
+    // "Lobby" just navigates back — it does NOT end the match. The match
+    // keeps running for both players; this tab/window simply returns to
+    // the lobby list. (window.close() used to be here, but most mobile
+    // browsers block closing a tab that wasn't opened as a true popup —
+    // navigating is the reliable option everywhere.)
+    function goToLobby() {
+      window.location.href = lobbyUrl;
+    }
+    btnLobby.addEventListener('click', goToLobby);
 
     if (!contestId || !supabaseUrl || !supabaseKey) {
       showOverlay('Missing match info', 'This window was not opened correctly from the lobby.', true);
@@ -224,6 +284,79 @@
     let oppPlayer = null;
     let selected = null; // {row, col}
 
+    // ── Leave match ───────────────────────────────────────────────────
+    // Calls the leave_checkers_contest RPC. If the contest was still
+    // 'open' this cancels+refunds; if booked/in_progress it forfeits the
+    // pot to the opponent. Safe to call more than once — the RPC itself
+    // guards against acting on an already-finished contest.
+    async function callLeaveRpc() {
+      if (hasLeftOrEnded) return;
+      hasLeftOrEnded = true;
+      try {
+        await supabase.rpc('leave_checkers_contest', {
+          p_contest_id: contestId,
+          p_user_id: myUserId,
+        });
+      } catch (err) {
+        console.error('leave_checkers_contest failed', err);
+      }
+    }
+
+    // Fired when the window/tab is actually closing. A normal async
+    // supabase.rpc() call can be aborted mid-flight when the page unloads,
+    // so for THIS path specifically we use fetch(..., {keepalive:true}),
+    // which browsers guarantee will still be sent after the page is gone.
+    // We still need an access token for the RLS-protected RPC call.
+    function leaveOnUnload() {
+      if (hasLeftOrEnded) return;
+      hasLeftOrEnded = true;
+      try {
+        supabase.auth.getSession().then(({ data }) => {
+          const token = data?.session?.access_token;
+          if (!token) return;
+          fetch(`${supabaseUrl}/rest/v1/rpc/leave_checkers_contest`, {
+            method: 'POST',
+            keepalive: true,
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: supabaseKey,
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ p_contest_id: contestId, p_user_id: myUserId }),
+          }).catch(() => {});
+        });
+      } catch (err) {
+        // best-effort only — nothing more we can do once the page is closing
+      }
+    }
+
+    btnLeave.addEventListener('click', () => {
+      if (!contest) return;
+      if (contest.status === 'open') {
+        confirmTitle.textContent = 'Cancel this match?';
+        confirmSub.textContent = contest.entry_fee_cents > 0
+          ? 'Your stake will be refunded.'
+          : 'No opponent has joined yet.';
+      } else {
+        confirmTitle.textContent = 'Leave this match?';
+        confirmSub.textContent = contest.entry_fee_cents > 0
+          ? 'Your opponent will win and take the pot. This can\u2019t be undone.'
+          : 'Your opponent will be marked the winner. This can\u2019t be undone.';
+      }
+      confirmOverlay.classList.add('show');
+    });
+    $('#confirm-cancel').addEventListener('click', () => confirmOverlay.classList.remove('show'));
+    $('#confirm-ok').addEventListener('click', async () => {
+      confirmOverlay.classList.remove('show');
+      await callLeaveRpc();
+      goToLobby();
+    });
+
+    // Best-effort: if the user closes the tab/window instead of clicking
+    // "Leave Match", still record it as a forfeit so the opponent isn't
+    // left waiting on a match that will never continue.
+    window.addEventListener('pagehide', leaveOnUnload);
+
     async function loadContestAndPlayers() {
       const [contestRes, playersRes] = await Promise.all([
         supabase.from('checkers_contests').select('*').eq('id', contestId).single(),
@@ -240,8 +373,16 @@
       roomCodeEl.textContent = contest.room_code;
       variantPill.textContent = contest.variant === 'russian' ? 'Russian' : 'English';
 
+      btnLeave.style.display = (contest.status === 'completed' || contest.status === 'cancelled') ? 'none' : '';
+
       if (contest.status === 'open') {
         statusPill.textContent = 'Waiting for opponent…';
+        statusPill.className = 'pill pill-wait';
+      } else if (contest.status === 'cancelled') {
+        statusPill.textContent = 'Cancelled';
+        statusPill.className = 'pill pill-wait';
+      } else if (contest.status === 'completed') {
+        statusPill.textContent = contest.forfeited_by ? 'Forfeited' : 'Finished';
         statusPill.className = 'pill pill-wait';
       } else {
         statusPill.textContent = 'Live';
@@ -261,7 +402,8 @@
     }
 
     function mountEngine() {
-      if (engine || !contest || contest.status === 'open') return;
+      if (engine || !contest) return;
+      if (contest.status === 'open' || contest.status === 'completed' || contest.status === 'cancelled') return;
 
       const themeKey = contest.theme || 'classic';
       const theme = { id: themeKey, ...THEMES[themeKey] };
@@ -356,7 +498,27 @@
         async (payload) => {
           contest = payload.new;
           renderHeader();
-          if (contest.status !== 'open') {
+
+          // Someone left. If it wasn't me, surface a clear message —
+          // this fires even if I'm mid-game, so stop the board from
+          // accepting further input.
+          if (contest.forfeited_by && contest.forfeited_by !== myUserId && !hasLeftOrEnded) {
+            hasLeftOrEnded = true;
+            if (engine) engine.status = 'ended'; // stop accepting picks
+            if (contest.status === 'cancelled') {
+              showOverlay('Match cancelled', 'The host left before the match started.', true);
+            } else {
+              const iWon = contest.winner_id === myUserId;
+              showOverlay(
+                iWon ? 'Opponent left — you win! 🏆' : 'Match ended',
+                iWon ? 'The pot has been credited to your wallet.' : 'Your opponent forfeited the match.',
+                true,
+              );
+            }
+            return;
+          }
+
+          if (contest.status !== 'open' && contest.status !== 'cancelled' && contest.status !== 'completed') {
             await loadContestAndPlayers();
             renderHeader();
             mountEngine();
@@ -386,6 +548,20 @@
       renderHeader();
       if (contest.status === 'open') {
         showOverlay('Waiting for opponent…', `Share room code ${contest.room_code}`, false);
+      } else if (contest.status === 'cancelled') {
+        hasLeftOrEnded = true;
+        showOverlay('Match cancelled', 'This match was cancelled before it started.', true);
+      } else if (contest.status === 'completed') {
+        hasLeftOrEnded = true;
+        const iWon = contest.winner_id === myUserId;
+        const isDraw = !contest.winner_id;
+        showOverlay(
+          contest.forfeited_by
+            ? (iWon ? 'Opponent left — you won! 🏆' : 'Match ended')
+            : (isDraw ? "It's a draw!" : iWon ? 'You won! 🏆' : 'You lost'),
+          contest.forfeited_by ? 'This match ended by forfeit.' : 'This match has already finished.',
+          true,
+        );
       } else {
         mountEngine();
       }
