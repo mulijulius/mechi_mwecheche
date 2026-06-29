@@ -393,24 +393,61 @@ html, body {
 
 /* ══════════════════════════════════════════════════════════
    RESPONSIVE — narrow screens
+   On phones, the 3-column layout left the board capped by a narrow
+   middle column even though most of the screen's height sat empty
+   above/below it (Renderer2D sizes the board off the SMALLER of the
+   canvas-wrap's width/height, so a tall-but-narrow wrap forces a small
+   square board). Switching to a vertical stack gives the board the
+   full screen width to size from, with height as the generous,
+   non-limiting dimension instead.
 ══════════════════════════════════════════════════════════ */
 @media (max-width: 680px) {
   .game-layout {
-    grid-template-columns: 120px 1fr 120px;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
   }
-  .sidebar { padding: 10px 6px; gap: 10px; }
-  .player-avatar { width: 40px; height: 40px; font-size: 1.5rem; }
-  .player-name { font-size: 0.78rem; }
-  .sidebar-controls, .cam-controls, .in-game-themes { font-size: 0.7rem; }
+  .sidebar {
+    flex-direction: row; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 10px;
+    overflow-x: auto;
+  }
+  .sidebar-left  { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.06); order: 1; }
+  .canvas-wrap   { order: 2; min-height: 0; }
+  .sidebar-right { border-left: none; border-top: 1px solid rgba(255,255,255,0.06); order: 3; }
+
+  .player-card {
+    flex-direction: row; padding: 8px 10px; gap: 8px;
+    flex: 1; min-width: 0;
+  }
+  .player-info { text-align: left; min-width: 0; }
+  .player-name { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-avatar { width: 36px; height: 36px; font-size: 1.4rem; flex-shrink: 0; }
+  .piece-count-row { margin-top: 2px; }
+
+  .sidebar-controls {
+    flex-direction: row; gap: 6px; flex-shrink: 0;
+  }
+  .ctrl-btn { padding: 8px 10px; font-size: 0.72rem; white-space: nowrap; }
+
+  .in-game-themes {
+    flex-direction: row; gap: 6px; flex-shrink: 0;
+  }
+  .in-game-themes .theme-btn { padding: 6px 8px; }
+
   .logo-title { font-size: 2rem; }
   .setup-card { padding: 20px 18px; }
 }
 
 @media (max-width: 480px) {
-  .game-layout {
-    grid-template-columns: 88px 1fr 88px;
-  }
   .setup-card { padding: 16px 14px; }
   .player-setup { flex-direction: column; }
   .vs-badge { display: none; }
+
+  /* At this width even the row-based sidebars are tight — drop the
+     win/loss record and shrink avatars further so the board's width
+     (now the full screen) stays the binding, generous dimension. */
+  .player-record { display: none; }
+  .player-avatar { width: 30px; height: 30px; font-size: 1.2rem; }
+  .ctrl-btn { padding: 7px 8px; font-size: 0.68rem; }
 }
