@@ -7,7 +7,7 @@
 
 import * as React from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Plus, Shield } from 'lucide-react'
+import { Plus, Shield, Bot } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { CheckersProvider, useCheckers } from '#/lib/checkers-context'
@@ -21,6 +21,43 @@ export const Route = createFileRoute('/_authed/dashboard/checkers/')({
     </CheckersProvider>
   ),
 })
+
+/** Opens the standalone practice-vs-computer page (public/checkers/index.html)
+ *  in a sized, centered popup — mirrors openBoardWindow() in $contestId.tsx
+ *  so both static checkers pages open the same way. This page takes no
+ *  query params: it's fully self-contained (no contest/user context, no
+ *  stakes — local practice only), so the URL is just the static path. */
+function openPracticeWindow() {
+  const url = '/checkers/index.html'
+
+  const width  = Math.min(1100, Math.round(window.screen.availWidth * 0.92))
+  const height = Math.min(850,  Math.round(window.screen.availHeight * 0.92))
+  const left   = Math.max(0, Math.round((window.screen.availWidth - width) / 2))
+  const top    = Math.max(0, Math.round((window.screen.availHeight - height) / 2))
+
+  const features = [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${left}`,
+    `top=${top}`,
+    'resizable=yes',
+    'scrollbars=no',
+    'status=no',
+    'toolbar=no',
+    'menubar=no',
+    'location=no',
+  ].join(',')
+
+  const win = window.open(url, 'checkers-practice', features)
+
+  if (!win) {
+    // Popup blocked — fall back to opening in the current tab.
+    window.location.href = url
+    return
+  }
+
+  win.focus()
+}
 
 function CheckersLobbyPage() {
   const { trialRemaining, openContests } = useCheckers()
@@ -43,10 +80,22 @@ function CheckersLobbyPage() {
           </p>
         </div>
 
-        <Button onClick={() => setShowHost(true)} className="shrink-0 gap-2">
-          <Plus className="size-4" />
-          Host Match
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            onClick={openPracticeWindow}
+            className="gap-2"
+            title="Free local practice — no stakes, play against the computer"
+          >
+            <Bot className="size-4" />
+            Practice vs Computer
+          </Button>
+
+          <Button onClick={() => setShowHost(true)} className="gap-2">
+            <Plus className="size-4" />
+            Host Match
+          </Button>
+        </div>
       </div>
 
       {/* Trial quota */}
