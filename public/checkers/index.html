@@ -36,6 +36,28 @@
         </div>
       </div>
 
+      <!-- Play vs AI -->
+      <div class="form-group ai-toggle-row">
+        <label class="ai-toggle-label">
+          <input id="vs-ai-toggle" type="checkbox" />
+          <span>🤖 Play vs Computer</span>
+        </label>
+      </div>
+
+      <div id="ai-color-row" class="form-group hidden">
+        <label class="form-label">YOU PLAY AS</label>
+        <div class="ai-color-choice">
+          <label class="ai-color-option">
+            <input type="radio" name="ai-color" value="black" checked />
+            <span class="piece-icon piece-black"></span> Dark (moves first)
+          </label>
+          <label class="ai-color-option">
+            <input type="radio" name="ai-color" value="white" />
+            <span class="piece-icon piece-white"></span> Light
+          </label>
+        </div>
+      </div>
+
       <!-- Variant -->
       <div class="form-group">
         <label class="form-label">GAME VARIANT</label>
