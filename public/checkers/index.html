@@ -1,216 +1,132 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>3D Checkers — Multi-Variant</title>
-<link rel="stylesheet" href="css/style.css" />
-</head>
-<body>
+/**
+ * src/routes/_authed/dashboard/checkers/index.tsx
+ *
+ * Checkers lobby page. Shows the Host button, trial quota badge,
+ * and the real-time ContestLobby list.
+ */
 
-<!-- ═══════════════════════════════════════════════════════ -->
-<!--  HOME SCREEN                                           -->
-<!-- ═══════════════════════════════════════════════════════ -->
-<div id="screen-home" class="screen">
-  <div class="home-bg"></div>
-  <div class="home-content">
+import * as React from 'react'
+import { createFileRoute } from '@tanstack/react-router'
+import { Plus, Shield, Bot } from 'lucide-react'
+import { Button } from '#/components/ui/button'
+import { Badge } from '#/components/ui/badge'
+import { CheckersProvider, useCheckers } from '#/lib/checkers-context'
+import { ContestLobby } from '#/components/checkers/contest-lobby'
+import { HostContestDialog } from '#/components/checkers/host-contest-dialog'
 
-    <header class="home-header">
-      <div class="logo-mark">♟</div>
-      <h1 class="logo-title">3D Checkers</h1>
-      <p class="logo-sub">Multi-Variant • 3D Rendered</p>
-    </header>
+export const Route = createFileRoute('/_authed/dashboard/checkers/')({
+  component: () => (
+    <CheckersProvider>
+      <CheckersLobbyPage />
+    </CheckersProvider>
+  ),
+})
 
-    <div class="setup-card">
+/** Opens the standalone practice-vs-computer page (public/checkers/index.html)
+ *  in a sized, centered popup — mirrors openBoardWindow() in $contestId.tsx
+ *  so both static checkers pages open the same way. This page takes no
+ *  query params: it's fully self-contained (no contest/user context, no
+ *  stakes — local practice only), so the URL is just the static path. */
+function openPracticeWindow() {
+  const url = '/checkers/index.html'
 
-      <!-- Player Names -->
-      <div class="player-setup">
-        <div class="player-input-wrap">
-          <div class="piece-icon piece-black"></div>
-          <input id="name-p2" class="name-input" type="text" placeholder="Dark Player" value="Player 2" maxlength="18" />
+  const width  = Math.min(1100, Math.round(window.screen.availWidth * 0.92))
+  const height = Math.min(850,  Math.round(window.screen.availHeight * 0.92))
+  const left   = Math.max(0, Math.round((window.screen.availWidth - width) / 2))
+  const top    = Math.max(0, Math.round((window.screen.availHeight - height) / 2))
+
+  const features = [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${left}`,
+    `top=${top}`,
+    'resizable=yes',
+    'scrollbars=no',
+    'status=no',
+    'toolbar=no',
+    'menubar=no',
+    'location=no',
+  ].join(',')
+
+  const win = window.open(url, 'checkers-practice', features)
+
+  if (!win) {
+    // Popup blocked — fall back to opening in the current tab.
+    window.location.href = url
+    return
+  }
+
+  win.focus()
+}
+
+function CheckersLobbyPage() {
+  const { trialRemaining, openContests } = useCheckers()
+  const [showHost, setShowHost] = React.useState(false)
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-arena-emerald">
+            Checkers 3D
+          </p>
+          <h1 className="mt-1 font-display text-2xl font-semibold text-arena-text">
+            Live Tables
+          </h1>
+          <p className="mt-1 text-sm text-arena-text-dim">
+            {openContests.length} open {openContests.length === 1 ? 'table' : 'tables'} •
+            English &amp; Russian variants
+          </p>
         </div>
-        <span class="vs-badge">VS</span>
-        <div class="player-input-wrap">
-          <div class="piece-icon piece-white"></div>
-          <input id="name-p1" class="name-input" type="text" placeholder="Light Player" value="Player 1" maxlength="18" />
+
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            onClick={openPracticeWindow}
+            className="gap-2"
+            title="Free local practice — no stakes, play against the computer"
+          >
+            <Bot className="size-4" />
+            Practice vs Computer
+          </Button>
+
+          <Button onClick={() => setShowHost(true)} className="gap-2">
+            <Plus className="size-4" />
+            Host Match
+          </Button>
         </div>
       </div>
 
-      <!-- Play vs AI -->
-      <div class="form-group ai-toggle-row">
-        <label class="ai-toggle-label">
-          <input id="vs-ai-toggle" type="checkbox" />
-          <span>🤖 Play vs Computer</span>
-        </label>
+      {/* Trial quota */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        <TrialBadge variant="english" remaining={trialRemaining.english} />
+        <TrialBadge variant="russian" remaining={trialRemaining.russian} />
       </div>
 
-      <div id="ai-color-row" class="form-group hidden">
-        <label class="form-label">YOU PLAY AS</label>
-        <div class="ai-color-choice">
-          <label class="ai-color-option">
-            <input type="radio" name="ai-color" value="black" checked />
-            <span class="piece-icon piece-black"></span> Dark (moves first)
-          </label>
-          <label class="ai-color-option">
-            <input type="radio" name="ai-color" value="white" />
-            <span class="piece-icon piece-white"></span> Light
-          </label>
-        </div>
-      </div>
+      {/* Lobby */}
+      <ContestLobby />
 
-      <!-- Variant -->
-      <div class="form-group">
-        <label class="form-label">GAME VARIANT</label>
-        <select id="game-type" class="form-select">
-          <option value="english">English Draughts (Standard 8×8)</option>
-          <option value="russian">Russian Checkers (Flying Kings)</option>
-        </select>
-      </div>
-
-      <!-- Rules desc -->
-      <p id="rules-desc" class="rules-desc">
-        English Draughts: diagonal forward movement, mandatory captures, kings move one step.
-      </p>
-
-      <!-- Theme picker -->
-      <div class="form-group">
-        <label class="form-label">BOARD THEME</label>
-        <div class="theme-row">
-          <button class="theme-btn active" data-theme="classic"  title="Classic Wood">
-            <span class="theme-swatch" style="background:linear-gradient(135deg,#DEB887 50%,#8B4513 50%)"></span>
-            <span>Classic</span>
-          </button>
-          <button class="theme-btn" data-theme="green"   title="Tournament Green">
-            <span class="theme-swatch" style="background:linear-gradient(135deg,#C8E6C9 50%,#388E3C 50%)"></span>
-            <span>Green</span>
-          </button>
-          <button class="theme-btn" data-theme="midnight" title="Midnight Blue">
-            <span class="theme-swatch" style="background:linear-gradient(135deg,#5C7FA8 50%,#1A2A4A 50%)"></span>
-            <span>Midnight</span>
-          </button>
-          <button class="theme-btn" data-theme="red"     title="Championship Red">
-            <span class="theme-swatch" style="background:linear-gradient(135deg,#FFCDD2 50%,#C62828 50%)"></span>
-            <span>Red</span>
-          </button>
-          <button class="theme-btn" data-theme="ivory"   title="Ivory &amp; Ebony">
-            <span class="theme-swatch" style="background:linear-gradient(135deg,#FFFde7 50%,#37474F 50%)"></span>
-            <span>Ivory</span>
-          </button>
-        </div>
-      </div>
-
-      <span id="trial-badge" class="badge badge-green">3 free matches remaining today</span>
-
-      <button id="btn-start" class="btn-primary btn-xl">
-        <span class="btn-icon">▶</span> Start Match
-      </button>
-
-      <button id="btn-rules" class="btn-ghost">How to Play</button>
-
-    </div><!-- /setup-card -->
-
-    <!-- Rules panel -->
-    <div id="rules-panel" class="rules-panel hidden">
-      <h3>How to Play</h3>
-      <ul>
-        <li><strong>Move:</strong> Click a piece to select it, then click a highlighted square to move.</li>
-        <li><strong>Capture:</strong> Jump over an opponent's piece to capture it. Captures are <em>mandatory</em>.</li>
-        <li><strong>Kings:</strong> Reach the far end to become a King (gold crown). Kings can move backwards.</li>
-        <li><strong>Russian variant:</strong> Kings "fly" along diagonals and can capture in any direction.</li>
-        <li><strong>Win:</strong> Capture all opponent pieces or leave them with no legal moves.</li>
-      </ul>
+      {/* Host dialog */}
+      <HostContestDialog open={showHost} onOpenChange={setShowHost} />
     </div>
+  )
+}
 
-  </div><!-- /home-content -->
-</div>
-
-<!-- ═══════════════════════════════════════════════════════ -->
-<!--  GAME SCREEN                                           -->
-<!-- ═══════════════════════════════════════════════════════ -->
-<div id="screen-game" class="screen hidden">
-
-  <div class="game-layout">
-
-    <!-- Left sidebar: Player Black -->
-    <aside class="sidebar sidebar-left">
-      <div id="p2-card" class="player-card active-turn">
-        <div class="player-avatar player-avatar-black">♟</div>
-        <div class="player-info">
-          <div id="p2-name" class="player-name">Player 2</div>
-          <div class="piece-count-row">
-            <span class="piece-dot dot-black"></span>
-            <span id="p2-count" class="piece-count">12</span>
-          </div>
-          <div id="p2-wins" class="player-record">0W 0L</div>
-        </div>
-      </div>
-
-      <div class="sidebar-controls">
-        <button id="btn-undo" class="ctrl-btn" title="Undo">↩ Undo</button>
-        <button id="btn-resign" class="ctrl-btn ctrl-btn-danger" title="Resign">⚑ Resign</button>
-        <button id="btn-new" class="ctrl-btn" title="Main Menu">⌂ Menu</button>
-      </div>
-    </aside>
-
-    <!-- Canvas wrapper -->
-    <main class="canvas-wrap">
-      <div id="turn-indicator" class="turn-indicator">Player 2's turn</div>
-      <canvas id="game-canvas"></canvas>
-    </main>
-
-    <!-- Right sidebar: Player White -->
-    <aside class="sidebar sidebar-right">
-      <div id="p1-card" class="player-card">
-        <div class="player-avatar player-avatar-white">♟</div>
-        <div class="player-info">
-          <div id="p1-name" class="player-name">Player 1</div>
-          <div class="piece-count-row">
-            <span class="piece-dot dot-white"></span>
-            <span id="p1-count" class="piece-count">12</span>
-          </div>
-          <div id="p1-wins" class="player-record">0W 0L</div>
-        </div>
-      </div>
-
-      <!-- Live theme switch in-game -->
-      <div class="in-game-themes">
-        <label class="form-label" style="color:#aaa;font-size:10px">THEME</label>
-        <button class="theme-btn active" data-theme="classic"   title="Classic">🪵</button>
-        <button class="theme-btn"        data-theme="green"     title="Green">🌿</button>
-        <button class="theme-btn"        data-theme="midnight"  title="Midnight">🌙</button>
-        <button class="theme-btn"        data-theme="red"       title="Red">🔴</button>
-        <button class="theme-btn"        data-theme="ivory"     title="Ivory">🤍</button>
-      </div>
-    </aside>
-
-  </div><!-- /game-layout -->
-
-</div><!-- /screen-game -->
-
-<!-- ═══════════════════════════════════════════════════════ -->
-<!--  RESULT MODAL                                         -->
-<!-- ═══════════════════════════════════════════════════════ -->
-<div id="result-modal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-confetti" aria-hidden="true">🎉</div>
-    <h2 id="result-title" class="modal-title">Player 1 Wins!</h2>
-    <p  id="result-sub"   class="modal-sub">by no pieces remaining</p>
-    <div id="result-stats" class="result-stats"></div>
-    <div class="modal-actions">
-      <button id="btn-play-again" class="btn-primary">▶ Play Again</button>
-      <button id="btn-main-menu"  class="btn-ghost">⌂ Main Menu</button>
+function TrialBadge({ variant, remaining }: { variant: 'english' | 'russian'; remaining: number }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border border-arena-border bg-arena-surface-2 px-3 py-1 text-xs">
+      <Shield className="size-3 text-arena-text-dim" />
+      <span className="capitalize text-arena-text-dim">{variant}</span>
+      <span
+        className={[
+          'font-mono font-semibold',
+          remaining === 0 ? 'text-arena-red' : 'text-arena-emerald',
+        ].join(' ')}
+      >
+        {remaining}/3
+      </span>
+      <span className="text-arena-text-dim">free</span>
     </div>
-  </div>
-</div>
-
-<!-- Toast -->
-<div id="toast" class="toast hidden"></div>
-
-<!-- ES Module bootstrap -->
-<script type="module">
-  import { App } from './js/App.js';
-  window._app = new App();
-</script>
-
-</body>
-</html>
+  )
+}
