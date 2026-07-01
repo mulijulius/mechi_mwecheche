@@ -177,25 +177,34 @@ export class Renderer2D {
   // ── Render loop ───────────────────────────────────────────
 
   _loop(now) {
-    this._rafId = requestAnimationFrame((t) => this._loop(t));
+    try {
+      this._rafId = requestAnimationFrame((t) => this._loop(t));
 
-    for (const t of Object.values(this._tokens)) {
-      if (t.x !== t.targetX || t.y !== t.targetY) {
-        if (t._fromX === undefined) { t._fromX = t.x; t._fromY = t.y; t._animT = 0; }
-        t._animT = Math.min(1, t._animT + 0.12);
-        const ep = this._easeInOut(t._animT);
-        t.x = lerp(t._fromX, t.targetX, ep);
-        t.y = lerp(t._fromY, t.targetY, ep);
-        if (t._animT >= 1) {
-          t.x = t.targetX; t.y = t.targetY;
-          t._fromX = undefined; t._fromY = undefined;
+      for (const t of Object.values(this._tokens)) {
+        if (t.x !== t.targetX || t.y !== t.targetY) {
+          if (t._fromX === undefined) { t._fromX = t.x; t._fromY = t.y; t._animT = 0; }
+          t._animT = Math.min(1, t._animT + 0.12);
+          const ep = this._easeInOut(t._animT);
+          t.x = lerp(t._fromX, t.targetX, ep);
+          t.y = lerp(t._fromY, t.targetY, ep);
+          if (t._animT >= 1) {
+            t.x = t.targetX; t.y = t.targetY;
+            t._fromX = undefined; t._fromY = undefined;
+          }
+        } else {
+          t._fromX = undefined; t._fromY = undefined; t._animT = undefined;
         }
-      } else {
-        t._fromX = undefined; t._fromY = undefined; t._animT = undefined;
       }
-    }
 
-    this._draw(now || performance.now());
+      this._draw(now || performance.now());
+    } catch (err) {
+      // Stop retrying every frame (which would otherwise silently re-throw
+      // 60x/sec) and surface the error once via a DOM event that the host
+      // page can display on-screen.
+      cancelAnimationFrame(this._rafId);
+      console.error('Renderer2D render loop crashed:', err);
+      window.dispatchEvent(new CustomEvent('ludo-render-error', { detail: err }));
+    }
   }
 
   _easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
