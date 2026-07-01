@@ -172,6 +172,38 @@ export const THEMES = {
   },
 };
 
+// ============================================================
+// Dice FX — shared by index.html (practice) and play.html (live match)
+// ============================================================
+// CSS gradient stops per seat color, used to recolor the dice to match
+// whichever player's turn it currently is.
+export const DICE_PALETTE = {
+  red:    ['#F16460', '#B71C1C'],
+  green:  ['#6FCB7E', '#1B5E20'],
+  yellow: ['#FFD85E', '#F57F17'],
+  blue:   ['#5AA9F0', '#0D47A1'],
+};
+
+/**
+ * Plays a quick "tumbling" effect before settling on the true dice value:
+ * flashes random faces for `durationMs`, then hands control back so the
+ * caller can reveal the real result and update the rest of the UI. The
+ * actual roll (engine.roll()) has already happened by this point — this is
+ * purely a cosmetic delay so a roll feels like a dice tumbling rather than
+ * an instant value swap.
+ */
+export function animateDiceRoll({ setFace, durationMs = 650, tickMs = 70, onDone }) {
+  let elapsed = 0;
+  const timer = setInterval(() => {
+    elapsed += tickMs;
+    setFace(1 + Math.floor(Math.random() * 6));
+    if (elapsed >= durationMs) {
+      clearInterval(timer);
+      if (onDone) onDone();
+    }
+  }, tickMs);
+}
+
 export class ThemeManager {
   constructor(initialTheme = 'classic') {
     this._current = initialTheme;
