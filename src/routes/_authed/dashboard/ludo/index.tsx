@@ -13,6 +13,7 @@ import * as React from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Plus, Shield, Bot } from 'lucide-react'
 import { Button } from '#/components/ui/button'
+import { useAuth } from '#/lib/auth-context'
 import { LudoProvider, useLudo } from '#/lib/ludo-context'
 import { ContestLobby } from '#/components/ludo/contest-lobby'
 import { HostContestDialog } from '#/components/ludo/host-contest-dialog'
@@ -27,10 +28,13 @@ export const Route = createFileRoute('/_authed/dashboard/ludo/')({
 
 /** Opens the standalone practice-vs-computer page (public/ludo/index.html)
  *  in a sized, centered popup — mirrors openPracticeWindow() in checkers'
- *  index.tsx so both static practice pages open the same way. No query
- *  params needed: fully self-contained local play, no stakes. */
-function openPracticeWindow() {
-  const url = '/ludo/index.html'
+ *  index.tsx so both static practice pages open the same way. The userId
+ *  is passed so the page can namespace its daily free-trial quota to this
+ *  account (previously the quota was a single global counter shared by
+ *  every account on the device — a new user could open practice mode and
+ *  immediately see 0 matches left if that browser had already been used). */
+function openPracticeWindow(userId?: string) {
+  const url = userId ? `/ludo/index.html?userId=${encodeURIComponent(userId)}` : '/ludo/index.html'
 
   const width  = Math.min(1100, Math.round(window.screen.availWidth * 0.92))
   const height = Math.min(850,  Math.round(window.screen.availHeight * 0.92))
@@ -61,6 +65,7 @@ function openPracticeWindow() {
 }
 
 function LudoLobbyPage() {
+  const { user } = useAuth()
   const { trialRemaining, openContests } = useLudo()
   const [showHost, setShowHost] = React.useState(false)
 
@@ -84,7 +89,7 @@ function LudoLobbyPage() {
         <div className="flex shrink-0 gap-2">
           <Button
             variant="outline"
-            onClick={openPracticeWindow}
+            onClick={() => openPracticeWindow(user?.id)}
             className="gap-2"
             title="Free local practice — no stakes, play against the computer"
           >
