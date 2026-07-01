@@ -1,5 +1,7 @@
 // Generated to match supabase/migrations/0001_init.sql, 0002_security_questions.sql,
-// 0003_admin_roles.sql, and 0004_checkers_matchmaking.sql.
+// 0003_admin_roles.sql, 0004_checkers_matchmaking.sql, 0005_checkers_leave_forfeit.sql,
+// 0006_checkers_move_sync.sql, 0007_checkers_zero_stake_payout_fix.sql,
+// 0008_ludo_matchmaking.sql, and 0009_ludo_move_sync.sql.
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
 
 export type GameSlug = 'ludo' | 'checkers' | 'chess' | 'billiards' | 'solitaire'
@@ -42,6 +44,51 @@ export type ContestStatus = 'open' | 'booked' | 'in_progress' | 'completed' | 'c
  */
 export type CheckersSquare = { color: 'black' | 'white'; king: boolean } | null
 export type CheckersBoard = CheckersSquare[][]
+
+// ---------------------------------------------------------------------------
+// Ludo-specific types (from 0008_ludo_matchmaking.sql, 0009_ludo_move_sync.sql)
+// ---------------------------------------------------------------------------
+
+export type LudoTheme = 'classic' | 'royal' | 'sunset' | 'ocean'
+
+export type LudoColor = 'red' | 'green' | 'yellow' | 'blue'
+
+export type LudoTokenState = 'home' | 'active' | 'finished'
+
+export interface LudoToken {
+  id: string
+  color: LudoColor
+  state: LudoTokenState
+  /** -1 while in the yard; 0-50 on the shared ring; 51-56 home stretch; 57 finished. */
+  pathIndex: number
+}
+
+export interface LudoPlayerState {
+  id: string
+  color: LudoColor
+  isActive: boolean
+  consecutiveSixes: number
+  tokens: LudoToken[]
+}
+
+/**
+ * Mirrors the shape produced by RuleProcessor.initialState() /
+ * GameEngine.snapshot in public/ludo/js/{RuleProcessor,GameEngine}.js.
+ * Persisted as jsonb on ludo_contests.game_state so every seated client
+ * renders the exact same authoritative state (0009_ludo_move_sync.sql).
+ */
+export interface LudoGameState {
+  matchId: string
+  players: LudoPlayerState[]
+  currentTurnPlayerId: string
+  turnIndex: number
+  phase: 'rolling' | 'moving' | 'finished'
+  lastDiceValue: number | null
+  consecutiveSixCount: number
+  winnerOrder: string[]
+  createdAt: number
+  updatedAt: number
+}
 
 /**
  * Single source of truth for what each admin sub-role can do, mirrored from
@@ -396,6 +443,125 @@ export interface Database {
           { foreignKeyName: 'checkers_trial_usage_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
+      // ---- Ludo-specific tables ---------------------------------------------
+      ludo_contests: {
+        Row: {
+          id: string
+          host_id: string
+          theme: LudoTheme
+          max_players: number
+          entry_fee_cents: number
+          pot_cents: number
+          status: ContestStatus
+          winner_id: string | null
+          forfeited_by: string | null
+          room_code: string
+          game_state: LudoGameState | null
+          current_seat: number | null
+          move_count: number
+          created_at: string
+          booked_at: string | null
+          started_at: string | null
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          host_id: string
+          theme?: LudoTheme
+          max_players?: number
+          entry_fee_cents?: number
+          pot_cents?: number
+          status?: ContestStatus
+          winner_id?: string | null
+          forfeited_by?: string | null
+          room_code?: string
+          game_state?: LudoGameState | null
+          current_seat?: number | null
+          move_count?: number
+          created_at?: string
+          booked_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          host_id?: string
+          theme?: LudoTheme
+          max_players?: number
+          entry_fee_cents?: number
+          pot_cents?: number
+          status?: ContestStatus
+          winner_id?: string | null
+          forfeited_by?: string | null
+          room_code?: string
+          game_state?: LudoGameState | null
+          current_seat?: number | null
+          move_count?: number
+          created_at?: string
+          booked_at?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+        }
+        Relationships: [
+          { foreignKeyName: 'ludo_contests_host_id_fkey'; columns: ['host_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+        ]
+      }
+      ludo_contest_players: {
+        Row: {
+          id: string
+          contest_id: string
+          user_id: string
+          seat: number
+          color: LudoColor
+          left_at: string | null
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          contest_id: string
+          user_id: string
+          seat: number
+          color: LudoColor
+          left_at?: string | null
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          contest_id?: string
+          user_id?: string
+          seat?: number
+          color?: LudoColor
+          left_at?: string | null
+          joined_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'ludo_contest_players_contest_id_fkey'; columns: ['contest_id']; referencedRelation: 'ludo_contests'; referencedColumns: ['id'] },
+          { foreignKeyName: 'ludo_contest_players_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+        ]
+      }
+      ludo_trial_usage: {
+        Row: {
+          id: string
+          user_id: string
+          usage_date: string
+          match_count: number
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          usage_date?: string
+          match_count?: number
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          usage_date?: string
+          match_count?: number
+        }
+        Relationships: [
+          { foreignKeyName: 'ludo_trial_usage_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -412,6 +578,10 @@ export interface Database {
       join_checkers_contest: {
         Args: { p_contest_id: string; p_user_id: string }
         Returns: string   // 'ok' | 'insufficient_funds' | 'already_full' | 'not_found' | 'trial_limit_reached'
+      }
+      leave_checkers_contest: {
+        Args: { p_contest_id: string; p_user_id: string }
+        Returns: string   // 'cancelled' | 'left' | 'forfeited' | 'not_found' | 'not_a_player' | 'already_over' | 'error'
       }
       complete_checkers_contest: {
         Args: { p_contest_id: string; p_winner_id: string | null }
@@ -455,6 +625,67 @@ export interface Database {
           created_at: string
         }>
       }
+      // ---- Ludo-specific functions ------------------------------------------
+      host_ludo_contest: {
+        Args: {
+          p_host_id: string
+          p_theme: LudoTheme
+          p_max_players: number
+          p_entry_fee_cents: number
+        }
+        Returns: string   // contest UUID or 'err:...'
+      }
+      join_ludo_contest: {
+        Args: { p_contest_id: string; p_user_id: string }
+        Returns: string   // 'ok' | 'insufficient_funds' | 'already_full' | 'not_found' | 'trial_limit_reached'
+      }
+      leave_ludo_contest: {
+        Args: { p_contest_id: string; p_user_id: string }
+        Returns: string   // 'cancelled' | 'left' | 'forfeited' | 'completed' | 'not_found' | 'not_a_player' | 'already_over' | 'error'
+      }
+      complete_ludo_contest: {
+        Args: { p_contest_id: string; p_winner_id: string | null }
+        Returns: void
+      }
+      make_ludo_move: {
+        Args: {
+          p_contest_id: string
+          p_user_id: string
+          p_game_state: LudoGameState
+          p_current_seat: number
+          p_move_count: number
+          p_game_over?: boolean
+          p_winner_id?: string | null
+        }
+        Returns: string   // 'ok' | 'not_found' | 'not_a_player' | 'not_in_progress' | 'not_your_turn'
+      }
+      seed_ludo_board: {
+        Args: {
+          p_contest_id: string
+          p_user_id: string
+          p_game_state: LudoGameState
+          p_current_seat: number
+          p_move_count: number
+        }
+        Returns: string   // 'ok' | 'already_seeded' | 'not_found' | 'not_a_player' | 'not_in_progress'
+      }
+      get_ludo_trial_remaining: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_open_ludo_contests: {
+        Args: Record<string, never>
+        Returns: Array<{
+          id: string
+          host_username: string
+          theme: LudoTheme
+          max_players: number
+          seated_players: number
+          entry_fee_cents: number
+          room_code: string
+          created_at: string
+        }>
+      }
     }
     Enums: {
       user_role: 'player' | 'admin'
@@ -468,6 +699,8 @@ export interface Database {
       checkers_variant: CheckersVariant
       checkers_theme: CheckersTheme
       contest_status: ContestStatus
+      ludo_theme: LudoTheme
+      ludo_color: LudoColor
     }
     CompositeTypes: Record<string, never>
   }
