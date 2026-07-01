@@ -142,6 +142,12 @@
   import { Renderer2D } from './js/Renderer2D.js';
   import { THEMES, TrialManager } from './js/Modules.js';
 
+  // Namespace the free-trial quota to the signed-in user (passed from the
+  // dashboard's "Practice vs Computer" launcher). Without this, the quota
+  // was a single global counter shared by every account on the device, so
+  // a brand-new user could inherit an already-exhausted count.
+  TrialManager.setUser(new URLSearchParams(window.location.search).get('userId'));
+
   const $ = (sel) => document.querySelector(sel);
   const COLORS = ['red', 'green', 'yellow', 'blue'];
   const COLOR_LABEL = { red: 'Red', green: 'Green', yellow: 'Yellow', blue: 'Blue' };
