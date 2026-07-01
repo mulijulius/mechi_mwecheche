@@ -25,6 +25,7 @@ export const GAME_CATALOGUE: Array<GameMeta> = [
     accentVar: '--color-arena-gold',
     glyph: '⚃',
     image: '/games/1000080272.jpg',
+    route: '/dashboard/ludo',
   },
   {
     slug: 'checkers',
