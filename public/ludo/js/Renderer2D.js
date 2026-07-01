@@ -69,11 +69,37 @@ export class Renderer2D {
 
     this._dpr = Math.min(window.devicePixelRatio || 1, 2);
 
+    // Resize is debounced through rAF instead of running synchronously on
+    // every ResizeObserver/window-resize callback. On mobile, the address
+    // bar collapsing right after page load fires a burst of rapid resize
+    // events; calling _resize() synchronously for each one can overwhelm
+    // the browser's ResizeObserver delivery queue, which then emits
+    // "ResizeObserver loop completed with undelivered notifications" and
+    // silently drops the pending (correct) size update — leaving the
+    // canvas stuck at its very first, often near-zero, measurement. This
+    // never showed up in "desktop site" mode because that skips the
+    // address-bar animation entirely.
+    this._resizePending = false;
+    this._scheduleResize = () => {
+      if (this._resizePending) return;
+      this._resizePending = true;
+      requestAnimationFrame(() => {
+        this._resizePending = false;
+        this._resize();
+      });
+    };
+
     this._resize();
-    this._ro = new ResizeObserver(() => this._resize());
+    this._ro = new ResizeObserver(() => this._scheduleResize());
     this._ro.observe(this.canvas);
-    this._onWindowResize = () => this._resize();
+    this._onWindowResize = () => this._scheduleResize();
     window.addEventListener('resize', this._onWindowResize);
+
+    // Self-heal: force one more re-measure a couple frames after startup,
+    // in case the very first _resize() above ran before the mobile browser
+    // had finished settling its real viewport height (e.g. address bar
+    // still animating away). Cheap no-op if the size was already correct.
+    setTimeout(() => this._scheduleResize(), 300);
 
     this._rafId = requestAnimationFrame((t) => this._loop(t));
   }
