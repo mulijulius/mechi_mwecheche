@@ -62,7 +62,7 @@ export class Renderer2D {
     this.theme  = theme;
     this.gridSize = 15;
 
-    // _tokens: tokenId -> { color, x, y, targetX, targetY, finished, _hop }
+    // _tokens: tokenId -> { color, x, y, state, _logicalState, _logicalPath, _waypoints }
     this._tokens   = {};
     this._hints    = []; // tokenIds eligible to move this turn
     this._selected = null; // tokenId
@@ -106,23 +106,51 @@ export class Renderer2D {
 
   // ── Token position resolution ─────────────────────────────
 
-  _targetFor(color, tokenIndex, token) {
-    if (token.state === 'home') {
+  /** Coordinate (in 15x15 grid units) for a given logical (state, pathIndex). */
+  _coordFor(color, tokenIndex, state, pathIndex) {
+    if (state === 'home') {
       const [r, c] = YARD_SLOTS[color][tokenIndex];
       return { x: c, y: r };
     }
-    if (token.state === 'finished') {
+    if (state === 'finished') {
       // Small fan-out around center so finished tokens don't fully overlap.
       const angle = (tokenIndex / 4) * Math.PI * 2;
       return { x: CENTER_COORD[1] + Math.cos(angle) * 0.35, y: CENTER_COORD[0] + Math.sin(angle) * 0.35 };
     }
-    if (token.pathIndex <= 50) {
-      const g = localToGlobal(color, token.pathIndex);
+    if (pathIndex <= 50) {
+      const g = localToGlobal(color, pathIndex);
       const [r, c] = TRACK_COORDS[g];
       return { x: c + 0.5, y: r + 0.5 };
     }
-    const [r, c] = HOME_STRETCH_COORDS[color][token.pathIndex - 51];
+    const [r, c] = HOME_STRETCH_COORDS[color][pathIndex - 51];
     return { x: c + 0.5, y: r + 0.5 };
+  }
+
+  _targetFor(color, tokenIndex, token) {
+    return this._coordFor(color, tokenIndex, token.state, token.pathIndex);
+  }
+
+  /**
+   * Builds the sequence of intermediate waypoints a token should visibly
+   * hop through when moving from one logical position to another — so a
+   * move of N squares drags/hops through each square along the actual
+   * track instead of snapping in a straight line across the board (which,
+   * for moves that cross a corner of the cross-shaped board, would cut
+   * visibly through the middle of the yards).
+   */
+  _buildWaypoints(color, tokenIndex, fromState, fromPath, toState, toPath) {
+    if (fromState === 'active' && toPath > fromPath && (toState === 'active' || toState === 'finished')) {
+      const steps = [];
+      const lastTrackStep = Math.min(toPath, 56);
+      for (let p = fromPath + 1; p <= lastTrackStep; p++) {
+        steps.push(this._coordFor(color, tokenIndex, 'active', p));
+      }
+      if (toState === 'finished') steps.push(this._coordFor(color, tokenIndex, 'finished', toPath));
+      return steps;
+    }
+    // Spawning out of the yard, being captured back to the yard, or any
+    // other non-sequential transition: nothing to walk through, just glide.
+    return [this._coordFor(color, tokenIndex, toState, toPath)];
   }
 
   /** Sync rendered tokens from the authoritative LudoGameState. */
@@ -132,18 +160,27 @@ export class Renderer2D {
       player.tokens.forEach((token, idx) => {
         const key = token.id;
         seen.add(key);
-        const target = this._targetFor(player.color, idx, token);
         const existing = this._tokens[key];
         if (!existing) {
-          this._tokens[key] = { color: player.color, x: target.x, y: target.y, targetX: target.x, targetY: target.y, state: token.state };
-        } else {
-          existing.color = player.color;
-          existing.state = token.state;
-          if (existing.targetX !== target.x || existing.targetY !== target.y) {
-            existing.targetX = target.x;
-            existing.targetY = target.y;
-            existing._animT = 0;
-          }
+          const target = this._coordFor(player.color, idx, token.state, token.pathIndex);
+          this._tokens[key] = {
+            color: player.color, x: target.x, y: target.y,
+            state: token.state,
+            _logicalState: token.state, _logicalPath: token.pathIndex,
+            _waypoints: [], _fromX: undefined, _fromY: undefined, _segT: 0,
+          };
+          return;
+        }
+        existing.color = player.color;
+        existing.state = token.state;
+        const changed = existing._logicalState !== token.state || existing._logicalPath !== token.pathIndex;
+        if (changed) {
+          existing._waypoints = this._buildWaypoints(player.color, idx, existing._logicalState, existing._logicalPath, token.state, token.pathIndex);
+          existing._fromX = undefined;
+          existing._fromY = undefined;
+          existing._segT = 0;
+          existing._logicalState = token.state;
+          existing._logicalPath = token.pathIndex;
         }
       });
     }
@@ -207,18 +244,21 @@ export class Renderer2D {
       this._rafId = requestAnimationFrame((t) => this._loop(t));
 
       for (const t of Object.values(this._tokens)) {
-        if (t.x !== t.targetX || t.y !== t.targetY) {
-          if (t._fromX === undefined) { t._fromX = t.x; t._fromY = t.y; t._animT = 0; }
-          t._animT = Math.min(1, t._animT + 0.12);
-          const ep = this._easeInOut(t._animT);
-          t.x = lerp(t._fromX, t.targetX, ep);
-          t.y = lerp(t._fromY, t.targetY, ep);
-          if (t._animT >= 1) {
-            t.x = t.targetX; t.y = t.targetY;
-            t._fromX = undefined; t._fromY = undefined;
+        if (t._waypoints && t._waypoints.length > 0) {
+          const next = t._waypoints[0];
+          if (t._fromX === undefined) { t._fromX = t.x; t._fromY = t.y; t._segT = 0; }
+          // ~7 frames per hop at 60fps (≈115ms/square) — slow enough to read
+          // as dragging/hopping across the board rather than teleporting.
+          t._segT = Math.min(1, t._segT + 0.14);
+          const ep = this._easeInOut(t._segT);
+          const hop = Math.sin(Math.min(1, t._segT) * Math.PI) * 0.16; // small vertical bounce per square
+          t.x = lerp(t._fromX, next.x, ep);
+          t.y = lerp(t._fromY, next.y, ep) - hop;
+          if (t._segT >= 1) {
+            t.x = next.x; t.y = next.y;
+            t._waypoints.shift();
+            t._fromX = undefined; t._fromY = undefined; t._segT = 0;
           }
-        } else {
-          t._fromX = undefined; t._fromY = undefined; t._animT = undefined;
         }
       }
 
