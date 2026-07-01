@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo — Practice</title>
+<style>
+  :root { --gold:#FFD700; --text:#f0f0e8; --muted:#aaa; --bg:#101010; }
+  * , *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+  html, body { width:100%; height:100%; overflow:hidden; font-family:'Segoe UI', system-ui, sans-serif; background:var(--bg); color:var(--text); -webkit-user-select:none; user-select:none; }
+  .screen { position:fixed; inset:0; }
+  .hidden { display:none !important; }
+
+  /* ── Home screen ─────────────────────────────────────────── */
+  #screen-home { display:flex; align-items:center; justify-content:center; overflow-y:auto; padding:24px; }
+  .setup-card { width:100%; max-width:420px; background:#1a1a1a; border:1px solid rgba(255,215,0,0.25); border-radius:18px; padding:26px; }
+  .logo-title { font-size:1.6rem; font-weight:800; color:var(--gold); text-align:center; }
+  .logo-sub { text-align:center; color:var(--muted); font-size:0.82rem; margin:4px 0 20px; }
+  .form-group { margin-bottom:16px; }
+  .form-label { display:block; font-size:0.72rem; letter-spacing:0.08em; color:var(--muted); margin-bottom:6px; text-transform:uppercase; }
+  .seat-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .seat-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+  .seat-dot.red{background:#E53935;} .seat-dot.green{background:#43A047;} .seat-dot.yellow{background:#FBC02D;} .seat-dot.blue{background:#1E88E5;}
+  .seat-row input[type=text] { flex:1; background:#222; border:1px solid #333; border-radius:8px; padding:8px 10px; color:var(--text); font-size:0.86rem; }
+  .seat-row select { background:#222; border:1px solid #333; border-radius:8px; padding:8px 8px; color:var(--text); font-size:0.8rem; }
+  .player-count-row { display:flex; gap:8px; }
+  .pc-btn { flex:1; padding:10px; border-radius:10px; border:1px solid #333; background:#202020; color:var(--text); cursor:pointer; font-weight:600; }
+  .pc-btn.active { border-color:var(--gold); color:var(--gold); background:rgba(255,215,0,0.08); }
+  .theme-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .theme-btn { flex:1; min-width:70px; padding:8px; border-radius:10px; border:1px solid #333; background:#202020; color:var(--text); cursor:pointer; font-size:0.78rem; }
+  .theme-btn.active { border-color:var(--gold); }
+  .btn-primary { width:100%; background:var(--gold); color:#1a1a1a; border:none; border-radius:12px; padding:13px; font-weight:800; font-size:0.95rem; cursor:pointer; margin-top:8px; }
+  .btn-ghost { width:100%; background:transparent; color:var(--muted); border:1px solid #333; border-radius:12px; padding:10px; font-size:0.82rem; cursor:pointer; margin-top:8px; }
+
+  /* ── Game screen ─────────────────────────────────────────── */
+  #screen-game { display:flex; flex-direction:column; }
+  #game-topbar { height:48px; display:flex; align-items:center; gap:10px; padding:0 12px; background:rgba(0,0,0,0.5); border-bottom:1px solid rgba(255,255,255,0.08); }
+  #game-topbar button { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:var(--text); border-radius:8px; padding:6px 10px; font-size:0.78rem; cursor:pointer; }
+  #turn-indicator { flex:1; text-align:center; font-weight:700; font-size:0.85rem; }
+  #canvas-wrap { position:relative; flex:1; }
+  #game-canvas { width:100%; height:100%; display:block; touch-action:none; cursor:pointer; }
+
+  #players-strip { position:absolute; top:8px; left:0; right:0; display:flex; justify-content:center; gap:6px; flex-wrap:wrap; pointer-events:none; }
+  .pcard { display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px 4px 6px; font-size:0.74rem; }
+  .pcard.active { border-color:var(--gold); }
+  .pdot { width:10px; height:10px; border-radius:50%; }
+  .pdot.red{background:#E53935;} .pdot.green{background:#43A047;} .pdot.yellow{background:#FBC02D;} .pdot.blue{background:#1E88E5;}
+
+  #dice-dock { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; }
+  #dice-btn { width:58px; height:58px; border-radius:13px; background:linear-gradient(160deg,#fff,#ddd); border:none; cursor:pointer; display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr 1fr; padding:8px; gap:2px; box-shadow:0 4px 14px rgba(0,0,0,0.5); }
+  #dice-btn:disabled { opacity:0.4; cursor:default; }
+  #dice-btn .pip { border-radius:50%; background:#222; opacity:0; }
+  #dice-hint { font-size:0.74rem; color:var(--muted); background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; }
+
+  #result-modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:40; padding:24px; }
+  .modal-card { background:#1a1a1a; border:1px solid rgba(255,215,0,0.3); border-radius:16px; padding:26px; text-align:center; max-width:340px; width:100%; }
+  .modal-title { color:var(--gold); font-size:1.3rem; font-weight:800; margin-bottom:6px; }
+  .modal-actions { display:flex; gap:10px; margin-top:18px; }
+  .modal-actions button { flex:1; padding:10px; border-radius:10px; border:none; font-weight:700; cursor:pointer; }
+  .btn-play-again { background:var(--gold); color:#1a1a1a; }
+  .btn-main-menu { background:#2a2a2a; color:var(--text); border:1px solid #3a3a3a !important; }
+
+  #toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:20px; padding:8px 18px; font-size:0.82rem; z-index:50; opacity:0; pointer-events:none; transition:opacity 0.25s; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div id="screen-home" class="screen">
+  <div class="setup-card">
+    <h1 class="logo-title">⚃ Ludo</h1>
+    <p class="logo-sub">Local play • No stakes</p>
+
+    <div class="form-group">
+      <label class="form-label">Players</label>
+      <div class="player-count-row">
+        <button class="pc-btn" data-count="2">2</button>
+        <button class="pc-btn" data-count="3">3</button>
+        <button class="pc-btn active" data-count="4">4</button>
+      </div>
+    </div>
+
+    <div class="form-group" id="seat-rows"></div>
+
+    <div class="form-group">
+      <label class="form-label">Board Theme</label>
+      <div class="theme-row">
+        <button class="theme-btn active" data-theme="classic">Classic</button>
+        <button class="theme-btn" data-theme="royal">Royal</button>
+        <button class="theme-btn" data-theme="sunset">Sunset</button>
+        <button class="theme-btn" data-theme="ocean">Ocean</button>
+      </div>
+    </div>
+
+    <span id="trial-badge" style="display:inline-block;font-size:0.74rem;color:#6CE39A;background:rgba(108,227,154,0.1);border:1px solid rgba(108,227,154,0.3);border-radius:999px;padding:4px 10px;">3 free matches remaining today</span>
+
+    <button id="btn-start" class="btn-primary">▶ Start Match</button>
+    <button id="btn-rules" class="btn-ghost">How to Play</button>
+
+    <div id="rules-panel" class="hidden" style="margin-top:14px;font-size:0.8rem;color:var(--muted);line-height:1.5;">
+      <p>Roll a six to bring a token out of your yard. Move tokens around the board; landing on an opponent's token sends it back home (unless it's on a starred safe square). Get all four tokens to the center to win. Rolling a six grants another roll — three sixes in a row forfeits the turn.</p>
+    </div>
+  </div>
+</div>
+
+<div id="screen-game" class="screen hidden">
+  <div id="game-topbar">
+    <button id="btn-menu">⌂ Menu</button>
+    <div id="turn-indicator">—</div>
+    <button id="btn-theme-cycle">🎨 Theme</button>
+  </div>
+  <div id="canvas-wrap">
+    <div id="players-strip"></div>
+    <canvas id="game-canvas"></canvas>
+    <div id="dice-dock">
+      <button id="dice-btn" title="Roll">
+        <span class="pip" id="pip-0"></span><span class="pip" id="pip-1"></span><span class="pip" id="pip-2"></span>
+        <span class="pip" id="pip-3"></span><span class="pip" id="pip-4"></span><span class="pip" id="pip-5"></span>
+        <span class="pip" id="pip-6"></span><span class="pip" id="pip-7"></span><span class="pip" id="pip-8"></span>
+      </button>
+      <span id="dice-hint">—</span>
+    </div>
+  </div>
+</div>
+
+<div id="result-modal" class="hidden">
+  <div class="modal-card">
+    <div style="font-size:2.4rem;">🏆</div>
+    <h2 id="result-title" class="modal-title">Player 1 Wins!</h2>
+    <p id="result-sub" style="color:var(--muted);font-size:0.85rem;"></p>
+    <div class="modal-actions">
+      <button id="btn-play-again" class="btn-play-again">Play Again</button>
+      <button id="btn-main-menu" class="btn-main-menu">Menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+  import { GameEngine } from './js/GameEngine.js';
+  import { Renderer2D } from './js/Renderer2D.js';
+  import { THEMES, TrialManager } from './js/Modules.js';
+
+  const $ = (sel) => document.querySelector(sel);
+  const COLORS = ['red', 'green', 'yellow', 'blue'];
+  const COLOR_LABEL = { red: 'Red', green: 'Green', yellow: 'Yellow', blue: 'Blue' };
+
+  let playerCount = 4;
+  let themeId = 'classic';
+  let seatIsAI = [false, true, true, true]; // seat 0 is always the human by default
+
+  // ── Home screen wiring ───────────────────────────────────────────────
+  function renderSeatRows() {
+    const wrap = $('#seat-rows');
+    wrap.innerHTML = '';
+    for (let i = 0; i < playerCount; i++) {
+      const color = COLORS[i];
+      const row = document.createElement('div');
+      row.className = 'seat-row';
+      row.innerHTML = `
+        <span class="seat-dot ${color}"></span>
+        <input type="text" maxlength="16" value="${i === 0 ? 'You' : COLOR_LABEL[color] + ' Bot'}" data-seat="${i}" />
+        <select data-ai-seat="${i}">
+          <option value="human" ${!seatIsAI[i] ? 'selected' : ''}>Human</option>
+          <option value="ai" ${seatIsAI[i] ? 'selected' : ''}>Computer</option>
+        </select>
+      `;
+      wrap.appendChild(row);
+    }
+    wrap.querySelectorAll('select[data-ai-seat]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        seatIsAI[Number(sel.dataset.aiSeat)] = sel.value === 'ai';
+      });
+    });
+  }
+
+  document.querySelectorAll('.pc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pc-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      playerCount = Number(btn.dataset.count);
+      // seat 0 stays human by default; the rest default to AI
+      seatIsAI = Array.from({ length: 4 }, (_, i) => i !== 0);
+      renderSeatRows();
+    });
+  });
+
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      themeId = btn.dataset.theme;
+    });
+  });
+
+  $('#btn-rules').addEventListener('click', () => $('#rules-panel').classList.toggle('hidden'));
+
+  function refreshTrialBadge() {
+    const remaining = TrialManager.remaining();
+    $('#trial-badge').textContent = `${remaining} free match${remaining === 1 ? '' : 'es'} remaining today`;
+    $('#trial-badge').style.color = remaining === 0 ? '#FF8A80' : '#6CE39A';
+    $('#trial-badge').style.borderColor = remaining === 0 ? 'rgba(255,138,128,0.3)' : 'rgba(108,227,154,0.3)';
+  }
+
+  renderSeatRows();
+  refreshTrialBadge();
+
+  // ── Game state ────────────────────────────────────────────────────────
+  let engine = null;
+  let renderer = null;
+  let seatNames = [];
+
+  function seatLabel(i) {
+    return $(`input[data-seat="${i}"]`)?.value || COLOR_LABEL[COLORS[i]];
+  }
+
+  function startMatch() {
+    if (!TrialManager.canPlay()) {
+      toast('Daily free match limit reached. Come back tomorrow!');
+      return;
+    }
+    TrialManager.recordMatch();
+    refreshTrialBadge();
+
+    seatNames = Array.from({ length: playerCount }, (_, i) => seatLabel(i));
+    const playerIds = Array.from({ length: playerCount }, (_, i) => `local-${i}`);
+
+    $('#screen-home').classList.add('hidden');
+    $('#screen-game').classList.remove('hidden');
+
+    const canvas = $('#game-canvas');
+    const theme = { id: themeId, ...THEMES[themeId] };
+    renderer = new Renderer2D(canvas, theme);
+
+    engine = new GameEngine({ matchId: 'practice', playerIds, themePreset: themeId });
+    engine.startGame();
+    renderer.syncTokens(engine.state);
+    renderPlayersStrip();
+    renderTurn();
+
+    canvas.addEventListener('click', (e) => handlePick(e.clientX, e.clientY));
+    canvas.addEventListener('touchend', (e) => {
+      const t = e.changedTouches[0];
+      if (t) handlePick(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    maybeRunAITurn();
+  }
+
+  function renderPlayersStrip() {
+    const strip = $('#players-strip');
+    strip.innerHTML = '';
+    engine.state.players.forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'pcard';
+      card.id = `p-${p.color}`;
+      card.innerHTML = `<span class="pdot ${p.color}"></span><span>${seatNames[i]}${seatIsAI[i] ? ' 🤖' : ''}</span>`;
+      strip.appendChild(card);
+    });
+  }
+
+  function renderTurn() {
+    const current = engine.currentPlayer;
+    const idx = engine.state.players.indexOf(current);
+    $('#turn-indicator').textContent = `${seatNames[idx]}'s turn`;
+
+    document.querySelectorAll('.pcard').forEach(el => el.classList.remove('active'));
+    $(`#p-${current.color}`)?.classList.add('active');
+
+    const isHumanTurn = !seatIsAI[idx];
+    const canRoll = isHumanTurn && engine.phase === 'rolling' && engine.status === 'playing';
+    $('#dice-btn').disabled = !canRoll;
+    renderDiceFace(engine.lastDiceValue);
+
+    if (engine.status === 'playing') {
+      $('#dice-hint').textContent = engine.phase === 'rolling'
+        ? (isHumanTurn ? 'Tap the dice to roll' : 'Computer is thinking…')
+        : (isHumanTurn ? 'Tap a glowing token to move it' : 'Computer is thinking…');
+    }
+  }
+
+  const PIP_LAYOUTS = { 1:[4], 2:[0,8], 3:[0,4,8], 4:[0,2,6,8], 5:[0,2,4,6,8], 6:[0,2,3,5,6,8] };
+  function renderDiceFace(value) {
+    for (let i = 0; i < 9; i++) $(`#pip-${i}`).style.opacity = 0;
+    if (!value) return;
+    for (const i of (PIP_LAYOUTS[value] || [])) $(`#pip-${i}`).style.opacity = 1;
+  }
+
+  function toast(msg) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2000);
+  }
+
+  $('#dice-btn').addEventListener('click', () => {
+    const idx = engine.state.players.indexOf(engine.currentPlayer);
+    if (seatIsAI[idx]) return;
+    doRoll();
+  });
+
+  function doRoll() {
+    const result = engine.roll();
+    renderer.syncTokens(engine.state);
+    if (result && !result.autoSkipped) renderer.showHints(result.legalMoves);
+    renderTurn();
+    checkGameOver();
+    maybeRunAITurn();
+  }
+
+  function handlePick(clientX, clientY) {
+    if (!engine || engine.status !== 'playing' || engine.phase !== 'moving') return;
+    const idx = engine.state.players.indexOf(engine.currentPlayer);
+    if (seatIsAI[idx]) return;
+
+    const hit = renderer.pick(clientX, clientY);
+    if (!hit || !hit.isHint) return;
+
+    const moveResult = engine.move(hit.tokenId);
+    if (!moveResult) return;
+
+    renderer.syncTokens(engine.state);
+    renderer.clearSelection();
+    renderTurn();
+    checkGameOver();
+    maybeRunAITurn();
+  }
+
+  // ── Simple AI: prefer captures, then finishing a token, then spawning,
+  // then the token furthest along the track. Good enough for practice play
+  // without needing a dedicated LudoAI.js module. ──────────────────────
+  function pickAIMove(legalMoves) {
+    const captures = legalMoves.filter(m => m.capturedTokenIds.length > 0);
+    if (captures.length) return captures[0];
+    const finishers = legalMoves.filter(m => m.toIndex === 57);
+    if (finishers.length) return finishers[0];
+    const spawns = legalMoves.filter(m => m.isSpawn);
+    if (spawns.length) return spawns[0];
+    return legalMoves.slice().sort((a, b) => b.toIndex - a.toIndex)[0];
+  }
+
+  function maybeRunAITurn() {
+    if (!engine || engine.status !== 'playing') return;
+    const idx = engine.state.players.indexOf(engine.currentPlayer);
+    if (!seatIsAI[idx]) return;
+
+    setTimeout(() => {
+      if (!engine || engine.status !== 'playing') return;
+      if (engine.phase === 'rolling') {
+        const result = engine.roll();
+        renderer.syncTokens(engine.state);
+        renderTurn();
+        checkGameOver();
+        if (result && !result.autoSkipped) {
+          setTimeout(() => {
+            const moves = engine.allLegalMoves();
+            const choice = pickAIMove(moves);
+            if (choice) {
+              engine.move(choice.tokenId);
+              renderer.syncTokens(engine.state);
+              renderTurn();
+              checkGameOver();
+            }
+            maybeRunAITurn();
+          }, 500);
+        } else {
+          maybeRunAITurn();
+        }
+      }
+    }, 600);
+  }
+
+  function checkGameOver() {
+    if (engine.status !== 'ended') return;
+    const winnerIdx = engine.state.players.findIndex(p => p.id === engine.winner);
+    $('#result-title').textContent = winnerIdx >= 0 ? `${seatNames[winnerIdx]} Wins! 🏆` : 'Game Over';
+    $('#result-sub').textContent = '';
+    $('#result-modal').classList.remove('hidden');
+  }
+
+  $('#btn-play-again').addEventListener('click', () => {
+    $('#result-modal').classList.add('hidden');
+    if (renderer) renderer.destroy();
+    startMatch();
+  });
+  $('#btn-main-menu').addEventListener('click', backToMenu);
+  $('#btn-menu').addEventListener('click', backToMenu);
+
+  function backToMenu() {
+    $('#result-modal').classList.add('hidden');
+    $('#screen-game').classList.add('hidden');
+    $('#screen-home').classList.remove('hidden');
+    if (renderer) { renderer.destroy(); renderer = null; }
+    engine = null;
+  }
+
+  const THEME_CYCLE = ['classic', 'royal', 'sunset', 'ocean'];
+  $('#btn-theme-cycle').addEventListener('click', () => {
+    if (!renderer) return;
+    themeId = THEME_CYCLE[(THEME_CYCLE.indexOf(themeId) + 1) % THEME_CYCLE.length];
+    renderer.applyTheme({ id: themeId, ...THEMES[themeId] });
+    toast(THEMES[themeId].name);
+  });
+
+  $('#btn-start').addEventListener('click', startMatch);
+</script>
+
+</body>
+</html>
