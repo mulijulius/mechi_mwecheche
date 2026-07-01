@@ -53,14 +53,32 @@ export class PlayerProfile {
 // ============================================================
 // TrialManager.js — Daily free-match quota (max 3)
 // ============================================================
+// NOTE: the quota is namespaced per signed-in user id (set via setUser()
+// before any other call, from the ?userId= query param in index.html).
+// Previously this used one global localStorage key shared by every account
+// that ever opened practice mode on a device/browser — so a brand-new user
+// who registered on a device that had already burned its 3 daily matches
+// (e.g. during testing, or under a different account) would immediately
+// see 0 remaining. Keying by user id gives each account its own
+// independent daily quota. Falls back to a shared 'guest' bucket only if
+// no userId was supplied at all.
 export class TrialManager {
   static MAX_FREE = 3;
-  static KEY = 'ludo_trial_data';
+  static _uid = null;
+
+  /** Call once at boot with the signed-in user's id (or null/undefined for guest). */
+  static setUser(userId) {
+    TrialManager._uid = userId || null;
+  }
+
+  static _key() {
+    return `ludo_trial_data_${TrialManager._uid || 'guest'}`;
+  }
 
   static canPlay() {
     const today = new Date().toDateString();
     try {
-      const raw  = localStorage.getItem(TrialManager.KEY);
+      const raw  = localStorage.getItem(TrialManager._key());
       const data = raw ? JSON.parse(raw) : {};
       if (data.date !== today) return true;
       return (data.count || 0) < TrialManager.MAX_FREE;
@@ -70,7 +88,7 @@ export class TrialManager {
   static remaining() {
     const today = new Date().toDateString();
     try {
-      const raw  = localStorage.getItem(TrialManager.KEY);
+      const raw  = localStorage.getItem(TrialManager._key());
       const data = raw ? JSON.parse(raw) : {};
       if (data.date !== today) return TrialManager.MAX_FREE;
       return Math.max(0, TrialManager.MAX_FREE - (data.count || 0));
@@ -80,10 +98,10 @@ export class TrialManager {
   static recordMatch() {
     const today = new Date().toDateString();
     try {
-      const raw   = localStorage.getItem(TrialManager.KEY);
+      const raw   = localStorage.getItem(TrialManager._key());
       const data  = raw ? JSON.parse(raw) : {};
       const count = (data.date === today ? data.count || 0 : 0) + 1;
-      localStorage.setItem(TrialManager.KEY, JSON.stringify({ date: today, count }));
+      localStorage.setItem(TrialManager._key(), JSON.stringify({ date: today, count }));
     } catch (_) {}
   }
 }
