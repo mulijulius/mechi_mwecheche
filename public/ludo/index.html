@@ -161,9 +161,14 @@
   // inside the rAF render loop) and prints it on-screen, since this page
   // is opened as a standalone popup on mobile with no console access.
   function showFatalError(label, err) {
+    const msg = (err && err.stack) ? err.stack : String(err && err.message !== undefined ? err.message : err);
+    // Chrome's own benign warning, unrelated to our code throwing — it just
+    // means some resize notifications were delivered a frame late. Not a
+    // real error; don't scare the user with it. (Renderer2D now debounces
+    // resizes via rAF specifically to stop this from happening at all.)
+    if (/ResizeObserver loop/.test(msg)) { console.warn(label, msg); return; }
     const banner = document.getElementById('err-banner');
     const text = document.getElementById('err-text');
-    const msg = (err && err.stack) ? err.stack : String(err);
     text.textContent = `${label}\n${msg}`;
     banner.classList.add('show');
     console.error(label, err);
