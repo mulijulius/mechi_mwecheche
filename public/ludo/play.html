@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Ludo — Live Match</title>
+<style>
+  :root {
+    --gold: #FFD700;
+    --text: #f0f0e8;
+    --text-muted: #aaa;
+    --board-bg: #1b1b1b;
+  }
+  * , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--board-bg);
+    color: var(--text);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px;
+    background: rgba(0,0,0,0.55);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 20;
+    backdrop-filter: blur(6px);
+  }
+  #topbar button {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+    color: var(--text); border-radius: 8px; padding: 7px 10px;
+    font-size: 0.8rem; cursor: pointer;
+  }
+  #topbar button:hover { background: rgba(255,255,255,0.16); }
+  #topbar button.danger {
+    border-color: rgba(229,57,53,0.45); color: #FF8A80;
+    background: rgba(229,57,53,0.12);
+  }
+  #topbar button.danger:hover { background: rgba(229,57,53,0.22); }
+  #room-code { font-family: monospace; color: var(--gold); font-weight: 700; }
+  .pill {
+    font-size: 0.72rem; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.15); white-space: nowrap;
+  }
+  .pill-live { color: #6CE39A; border-color: rgba(108,227,154,0.4); background: rgba(108,227,154,0.08); }
+  .pill-wait { color: #FFD180; border-color: rgba(255,209,128,0.4); background: rgba(255,209,128,0.08); }
+  #topbar .spacer { flex: 1; }
+  #turn-pill { font-weight: 700; }
+
+  #players {
+    position: fixed; top: 52px; left: 0; right: 0;
+    display: flex; justify-content: center; flex-wrap: wrap; gap: 6px;
+    padding: 6px 12px;
+    font-size: 0.76rem;
+    z-index: 15;
+    pointer-events: none;
+  }
+  .pcard {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    padding: 4px 10px 4px 6px;
+  }
+  .pcard.active { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.25); }
+  .pcard.left { opacity: 0.4; text-decoration: line-through; }
+  .pdot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .pdot.red    { background: radial-gradient(circle at 35% 35%, #ff8a80, #B71C1C); }
+  .pdot.green  { background: radial-gradient(circle at 35% 35%, #a5f3c2, #1B5E20); }
+  .pdot.yellow { background: radial-gradient(circle at 35% 35%, #fff2a8, #F57F17); }
+  .pdot.blue   { background: radial-gradient(circle at 35% 35%, #a8d8ff, #0D47A1); }
+
+  #canvas-wrap {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #game-canvas {
+    width: 100%; height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: pointer;
+  }
+
+  /* ── Dice control ────────────────────────────────────────── */
+  #dice-dock {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 18;
+    display: flex; align-items: center; gap: 14px;
+  }
+  #dice-btn {
+    width: 64px; height: 64px; border-radius: 14px;
+    background: linear-gradient(160deg, #fff, #ddd);
+    border: none; cursor: pointer;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
+    padding: 9px; gap: 2px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  }
+  #dice-btn:disabled { opacity: 0.4; cursor: default; }
+  #dice-btn .pip { border-radius: 50%; background: #222; opacity: 0; }
+  #dice-hint {
+    font-size: 0.78rem; color: var(--text-muted);
+    background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 10px;
+  }
+
+  #overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7);
+    z-index: 30;
+    text-align: center;
+    padding: 24px;
+  }
+  #overlay.show { display: flex; }
+  #overlay .card {
+    background: linear-gradient(160deg, #1b1b1b 0%, #0a0a0a 100%);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 18px; padding: 28px 30px;
+    max-width: 360px; width: 100%;
+  }
+  #overlay h2 { color: var(--gold); font-size: 1.4rem; margin-bottom: 8px; }
+  #overlay p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 18px; }
+  #overlay .room-big {
+    font-family: monospace; font-size: 1.8rem; letter-spacing: 0.25em;
+    color: var(--gold); font-weight: 700; margin: 10px 0 20px;
+  }
+  #overlay button {
+    background: var(--gold); color: #1a2e0f; border: none;
+    border-radius: 10px; padding: 10px 22px; font-weight: 700;
+    font-size: 0.9rem; cursor: pointer;
+  }
+
+  #confirm-overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.75);
+    z-index: 35;
+    text-align: center;
+    padding: 24px;
+  }
+  #confirm-overlay.show { display: flex; }
+  #confirm-overlay .card {
+    background: linear-gradient(160deg, #2a1010 0%, #1a0a0a 100%);
+    border: 1px solid rgba(255,138,128,0.35);
+    border-radius: 18px; padding: 26px 28px;
+    max-width: 340px; width: 100%;
+  }
+  #confirm-overlay h2 { color: #FF8A80; font-size: 1.2rem; margin-bottom: 8px; }
+  #confirm-overlay p { color: var(--text-muted); font-size: 0.86rem; margin-bottom: 18px; }
+  #confirm-overlay button.ghost {
+    background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px; padding: 10px 18px; font-size: 0.88rem; cursor: pointer;
+  }
+  #confirm-overlay button.danger-solid {
+    background: #e53935; color: #fff; border: none;
+    border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 0.88rem; cursor: pointer;
+  }
+  .spinner {
+    width: 36px; height: 36px; margin: 0 auto 14px;
+    border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--gold);
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #toast {
+    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px; padding: 9px 20px;
+    font-size: 0.85rem; z-index: 40; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+  <div id="topbar">
+    <button id="btn-lobby">← Lobby</button>
+    <button id="btn-leave" class="danger">Leave Match</button>
+    <span id="room-code">—</span>
+    <span id="status-pill" class="pill pill-wait">Connecting…</span>
+    <div class="spacer"></div>
+    <span id="turn-pill" class="pill">—</span>
+  </div>
+
+  <div id="players"></div>
+
+  <div id="canvas-wrap">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <div id="dice-dock">
+    <button id="dice-btn" title="Roll">
+      <span class="pip" id="pip-0"></span><span class="pip" id="pip-1"></span><span class="pip" id="pip-2"></span>
+      <span class="pip" id="pip-3"></span><span class="pip" id="pip-4"></span><span class="pip" id="pip-5"></span>
+      <span class="pip" id="pip-6"></span><span class="pip" id="pip-7"></span><span class="pip" id="pip-8"></span>
+    </button>
+    <span id="dice-hint">—</span>
+  </div>
+
+  <div id="overlay" class="show">
+    <div class="card">
+      <div class="spinner"></div>
+      <h2>Loading match…</h2>
+      <p id="overlay-sub">Connecting to room</p>
+    </div>
+  </div>
+
+  <div id="confirm-overlay">
+    <div class="card">
+      <h2 id="confirm-title">Leave this match?</h2>
+      <p id="confirm-sub">Your tokens will be removed from play. This can't be undone.</p>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button id="confirm-cancel" class="ghost">Stay</button>
+        <button id="confirm-ok" class="danger-solid">Leave Match</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <script type="module">
+    import { GameEngine, COLORS } from './js/GameEngine.js';
+    import { Renderer2D } from './js/Renderer2D.js';
+    import { THEMES } from './js/Modules.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const contestId    = params.get('contestId');
+    const supabaseUrl  = params.get('supabaseUrl');
+    const supabaseKey  = params.get('supabaseKey');
+    const myUserId     = params.get('userId');
+    const lobbyUrl     = params.get('lobbyUrl') || '/dashboard/ludo';
+
+    const $ = (sel) => document.querySelector(sel);
+    const overlay        = $('#overlay');
+    const overlaySub     = $('#overlay-sub');
+    const confirmOverlay = $('#confirm-overlay');
+    const confirmTitle   = $('#confirm-title');
+    const confirmSub     = $('#confirm-sub');
+    const statusPill     = $('#status-pill');
+    const turnPill       = $('#turn-pill');
+    const roomCodeEl     = $('#room-code');
+    const toastEl        = $('#toast');
+    const canvas         = $('#game-canvas');
+    const btnLobby       = $('#btn-lobby');
+    const btnLeave       = $('#btn-leave');
+    const playersStrip   = $('#players');
+    const diceBtn        = $('#dice-btn');
+    const diceHint       = $('#dice-hint');
+
+    let hasLeftOrEnded = false;
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 2200);
+    }
+
+    function showOverlay(title, sub, withCloseButton) {
+      overlay.querySelector('h2').textContent = title;
+      overlaySub.textContent = sub || '';
+      const old = overlay.querySelector('button');
+      if (old) old.remove();
+      if (withCloseButton) {
+        const btn = document.createElement('button');
+        btn.textContent = 'Back to Lobby';
+        btn.onclick = () => goToLobby();
+        overlay.querySelector('.card').appendChild(btn);
+      }
+      overlay.classList.add('show');
+    }
+    function hideOverlay() { overlay.classList.remove('show'); }
+
+    function goToLobby() { window.location.href = lobbyUrl; }
+    btnLobby.addEventListener('click', goToLobby);
+
+    if (!contestId || !supabaseUrl || !supabaseKey) {
+      showOverlay('Missing match info', 'This window was not opened correctly from the lobby.', true);
+      throw new Error('play.html: missing required query params');
+    }
+
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+
+    let contest = null;
+    let players = [];
+    let engine = null;
+    let renderer = null;
+    let myPlayer = null;
+
+    // ── Leave match ───────────────────────────────────────────────────
+    async function callLeaveRpc() {
+      if (hasLeftOrEnded) return;
+      hasLeftOrEnded = true;
+      try {
+        await supabase.rpc('leave_ludo_contest', { p_contest_id: contestId, p_user_id: myUserId });
+      } catch (err) {
+        console.error('leave_ludo_contest failed', err);
+      }
+    }
+
+    function leaveOnUnload() {
+      if (hasLeftOrEnded) return;
+      hasLeftOrEnded = true;
+      try {
+        supabase.auth.getSession().then(({ data }) => {
+          const token = data?.session?.access_token;
+          if (!token) return;
+          fetch(`${supabaseUrl}/rest/v1/rpc/leave_ludo_contest`, {
+            method: 'POST',
+            keepalive: true,
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: supabaseKey,
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ p_contest_id: contestId, p_user_id: myUserId }),
+          }).catch(() => {});
+        });
+      } catch (err) {}
+    }
+
+    btnLeave.addEventListener('click', () => {
+      if (!contest) return;
+      if (contest.status === 'open') {
+        confirmTitle.textContent = 'Cancel this match?';
+        confirmSub.textContent = contest.entry_fee_cents > 0
+          ? 'Your stake will be refunded.'
+          : 'No challengers have joined yet.';
+      } else {
+        confirmTitle.textContent = 'Leave this match?';
+        confirmSub.textContent = 'Your tokens are removed from play. If you are the last one standing, the remaining player wins the pot.';
+      }
+      confirmOverlay.classList.add('show');
+    });
+    $('#confirm-cancel').addEventListener('click', () => confirmOverlay.classList.remove('show'));
+    $('#confirm-ok').addEventListener('click', async () => {
+      confirmOverlay.classList.remove('show');
+      await callLeaveRpc();
+      goToLobby();
+    });
+
+    window.addEventListener('pagehide', leaveOnUnload);
+
+    async function loadContestAndPlayers() {
+      const [contestRes, playersRes] = await Promise.all([
+        supabase.from('ludo_contests').select('*').eq('id', contestId).single(),
+        supabase.from('ludo_contest_players').select('*, profiles(username)').eq('contest_id', contestId).order('seat'),
+      ]);
+      if (contestRes.data) contest = contestRes.data;
+      if (playersRes.data) players = playersRes.data;
+      myPlayer = players.find(p => p.user_id === myUserId) || null;
+    }
+
+    function renderHeader() {
+      if (!contest) return;
+      roomCodeEl.textContent = contest.room_code;
+      btnLeave.style.display = (contest.status === 'completed' || contest.status === 'cancelled') ? 'none' : '';
+
+      if (contest.status === 'open') {
+        statusPill.textContent = `Waiting (${players.length}/${contest.max_players})…`;
+        statusPill.className = 'pill pill-wait';
+      } else if (contest.status === 'cancelled') {
+        statusPill.textContent = 'Cancelled';
+        statusPill.className = 'pill pill-wait';
+      } else if (contest.status === 'completed') {
+        statusPill.textContent = contest.forfeited_by ? 'Forfeited' : 'Finished';
+        statusPill.className = 'pill pill-wait';
+      } else {
+        statusPill.textContent = 'Live';
+        statusPill.className = 'pill pill-live';
+      }
+
+      playersStrip.innerHTML = '';
+      for (const p of players) {
+        const card = document.createElement('div');
+        card.className = 'pcard';
+        card.id = `p-${p.color}`;
+        if (p.left_at) card.classList.add('left');
+        card.innerHTML = `<span class="pdot ${p.color}"></span><span>${p.profiles?.username ?? '—'}</span>`;
+        playersStrip.appendChild(card);
+      }
+    }
+
+    function renderTurn() {
+      if (!engine) return;
+      const current = engine.currentPlayer;
+      const mine = current.id === myPlayer?.user_id;
+      turnPill.textContent = mine ? 'Your turn' : `${players.find(p => p.user_id === current.id)?.profiles?.username ?? '...'}'s turn`;
+
+      document.querySelectorAll('.pcard').forEach(el => el.classList.remove('active'));
+      const card = document.getElementById(`p-${current.color}`);
+      if (card) card.classList.add('active');
+
+      const canRoll = mine && engine.phase === 'rolling' && engine.status === 'playing';
+      diceBtn.disabled = !canRoll;
+      renderDiceFace(engine.lastDiceValue);
+
+      if (engine.status === 'playing') {
+        diceHint.textContent = engine.phase === 'rolling'
+          ? (mine ? 'Tap the dice to roll' : 'Waiting for roll…')
+          : (mine ? 'Tap a glowing token to move it' : 'Waiting for move…');
+      }
+    }
+
+    const PIP_LAYOUTS = {
+      1: [4], 2: [0,8], 3: [0,4,8], 4: [0,2,6,8], 5: [0,2,4,6,8], 6: [0,2,3,5,6,8],
+    };
+    function renderDiceFace(value) {
+      for (let i = 0; i < 9; i++) $(`#pip-${i}`).style.opacity = 0;
+      if (!value) return;
+      for (const i of (PIP_LAYOUTS[value] || [])) $(`#pip-${i}`).style.opacity = 1;
+    }
+
+    // Guards re-entrancy while waiting for an RPC round-trip.
+    let actionInFlight = false;
+
+    function mountEngine() {
+      if (engine || !contest) return;
+      if (contest.status === 'open' || contest.status === 'completed' || contest.status === 'cancelled') return;
+
+      const themeKey = contest.theme || 'classic';
+      const theme = { id: themeKey, ...THEMES[themeKey] };
+      renderer = new Renderer2D(canvas, theme);
+
+      const orderedPlayerIds = players.slice().sort((a, b) => a.seat - b.seat).map(p => p.user_id);
+      engine = new GameEngine({ matchId: contestId, playerIds: orderedPlayerIds, themePreset: themeKey });
+
+      // NOTE: same philosophy as checkers — the engine is a local rules
+      // validator. The board that's actually rendered always comes from the
+      // server's game_state/current_seat columns via applyServerState().
+
+      if (contest.game_state) {
+        engine.loadState(contest.game_state, contest.move_count || 0);
+        renderer.syncTokens(engine.state);
+        renderTurn();
+      } else {
+        engine.startGame();
+        renderer.syncTokens(engine.state);
+        renderTurn();
+        supabase.rpc('seed_ludo_board', {
+          p_contest_id: contestId,
+          p_user_id: myUserId,
+          p_game_state: engine.state,
+          p_current_seat: engine.state.turnIndex,
+          p_move_count: engine.moveCount,
+        }).then(({ error }) => { if (error) console.error('initial ludo seed failed', error); });
+      }
+
+      hideOverlay();
+    }
+
+    function applyServerState(updatedContest) {
+      if (!engine || !renderer) return;
+      if (!updatedContest.game_state) return;
+
+      let state = updatedContest.game_state;
+      if (typeof state === 'string') {
+        try { state = JSON.parse(state); } catch (e) { console.error('failed to parse game_state', e); return; }
+      }
+
+      try {
+        engine.loadState(state, updatedContest.move_count || 0);
+        renderer.syncTokens(engine.state);
+        renderer.clearSelection();
+        renderTurn();
+        actionInFlight = false;
+      } catch (e) {
+        console.error('applyServerState threw', e);
+      }
+    }
+
+    function seatOf(userId) {
+      const p = players.find(pl => pl.user_id === userId);
+      return p ? p.seat : null;
+    }
+
+    async function persist(gameOverPayload) {
+      const turnAfter = engine.state.turnIndex;
+      const moveCountAfter = engine.moveCount;
+      const isGameOver = engine.status === 'ended';
+
+      let winnerId = null;
+      if (isGameOver && engine.winner) {
+        const winnerPlayer = players.find(p => p.user_id === engine.winner);
+        winnerId = winnerPlayer ? winnerPlayer.user_id : null;
+      }
+
+      const { data, error } = await supabase.rpc('make_ludo_move', {
+        p_contest_id: contestId,
+        p_user_id: myUserId,
+        p_game_state: engine.state,
+        p_current_seat: turnAfter,
+        p_move_count: moveCountAfter,
+        p_game_over: isGameOver,
+        p_winner_id: winnerId,
+      });
+
+      if (error || data !== 'ok') {
+        console.error('make_ludo_move failed', error, data);
+        toast(data === 'not_your_turn' ? "It's not your turn" : 'Action failed — syncing…');
+        await loadContestAndPlayers();
+        if (contest.game_state) applyServerState(contest);
+        actionInFlight = false;
+        return;
+      }
+
+      if (isGameOver) handleGameOver();
+    }
+
+    function handleGameOver() {
+      const iWon = engine.winner === myPlayer?.user_id;
+      showOverlay(
+        iWon ? 'You win! 🏆' : (engine.winner ? 'Game over' : "It's a draw"),
+        '',
+        true,
+      );
+    }
+
+    async function handleRoll() {
+      if (!engine || actionInFlight) return;
+      if (engine.currentPlayer.id !== myPlayer?.user_id) { toast("It's not your turn"); return; }
+      if (engine.phase !== 'rolling') return;
+
+      actionInFlight = true;
+      const result = engine.roll();
+      renderer.syncTokens(engine.state);
+      renderTurn();
+
+      if (!result) { actionInFlight = false; return; }
+      if (!result.autoSkipped) {
+        renderer.showHints(result.legalMoves);
+      }
+      await persist();
+    }
+
+    async function handleTokenPick(clientX, clientY) {
+      if (!engine || !renderer || engine.status !== 'playing') return;
+      if (actionInFlight) return;
+      if (engine.currentPlayer.id !== myPlayer?.user_id) { toast("It's not your turn"); return; }
+      if (engine.phase !== 'moving') { toast('Roll the dice first'); return; }
+
+      const hit = renderer.pick(clientX, clientY);
+      if (!hit || !hit.isHint) return;
+
+      actionInFlight = true;
+      const moveResult = engine.move(hit.tokenId);
+      if (!moveResult) { actionInFlight = false; toast('That token cannot move'); return; }
+
+      renderer.syncTokens(engine.state);
+      renderer.clearSelection();
+      renderTurn();
+      await persist();
+    }
+
+    diceBtn.addEventListener('click', handleRoll);
+    canvas.addEventListener('click', (e) => handleTokenPick(e.clientX, e.clientY));
+
+    let touchStartX = 0, touchStartY = 0, touchMoved = false;
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; touchMoved = false;
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - touchStartX, dy = e.touches[0].clientY - touchStartY;
+      if (Math.hypot(dx, dy) > 12) touchMoved = true;
+    }, { passive: true });
+    canvas.addEventListener('touchend', (e) => {
+      if (touchMoved) return;
+      const t = e.changedTouches[0];
+      if (t) handleTokenPick(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    // ── Realtime updates ──────────────────────────────────────────────
+    const channel = supabase
+      .channel(`ludo-contest-room-${contestId}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ludo_contests', filter: `id=eq.${contestId}` },
+        async (payload) => {
+          try {
+            contest = payload.new;
+            renderHeader();
+
+            if (contest.forfeited_by && contest.forfeited_by !== myUserId && !hasLeftOrEnded && contest.status !== 'in_progress' && contest.status !== 'booked') {
+              hasLeftOrEnded = true;
+              if (engine) engine.status = 'ended';
+              if (contest.status === 'cancelled') {
+                showOverlay('Match cancelled', 'The host left before the match started.', true);
+              } else {
+                const iWon = contest.winner_id === myUserId;
+                showOverlay(
+                  iWon ? 'Everyone else left — you win! 🏆' : 'Match ended',
+                  iWon ? 'The pot has been credited to your wallet.' : 'This match has ended.',
+                  true,
+                );
+              }
+              return;
+            }
+
+            if (contest.status === 'completed' && !hasLeftOrEnded) {
+              hasLeftOrEnded = true;
+              if (engine) engine.status = 'ended';
+              if (contest.game_state) {
+                engine?.loadState(contest.game_state, contest.move_count || 0);
+                renderer?.syncTokens(engine.state);
+              }
+              const iWon = contest.winner_id === myUserId;
+              showOverlay(iWon ? 'You win! 🏆' : 'Game over', '', true);
+              return;
+            }
+
+            if (contest.status === 'open' || contest.status === 'cancelled' || contest.status === 'completed') {
+              return;
+            }
+
+            if (!engine) {
+              await loadContestAndPlayers();
+              renderHeader();
+              mountEngine();
+            } else {
+              await loadContestAndPlayers();
+              renderHeader();
+              applyServerState(contest);
+            }
+          } catch (e) {
+            console.error('realtime UPDATE handler threw', e);
+          }
+        })
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ludo_contest_players', filter: `contest_id=eq.${contestId}` },
+        async () => {
+          await loadContestAndPlayers();
+          renderHeader();
+          mountEngine();
+        })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ludo_contest_players', filter: `contest_id=eq.${contestId}` },
+        async () => {
+          await loadContestAndPlayers();
+          renderHeader();
+        })
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          toast('Connection issue — moves may not sync. Try reloading.');
+        }
+      });
+
+    window.addEventListener('beforeunload', () => {
+      supabase.removeChannel(channel);
+      if (renderer) renderer.destroy();
+    });
+
+    // ── Boot ────────────────────────────────────────────────────────────
+    (async function boot() {
+      await loadContestAndPlayers();
+      if (!contest) {
+        showOverlay('Contest not found', 'This match may have ended or the link is invalid.', true);
+        return;
+      }
+      renderHeader();
+      if (contest.status === 'open') {
+        showOverlay('Waiting for players…', `Share room code ${contest.room_code}`, false);
+      } else if (contest.status === 'cancelled') {
+        hasLeftOrEnded = true;
+        showOverlay('Match cancelled', 'This match was cancelled before it started.', true);
+      } else if (contest.status === 'completed') {
+        hasLeftOrEnded = true;
+        const iWon = contest.winner_id === myUserId;
+        showOverlay(
+          contest.forfeited_by ? (iWon ? 'Others left — you won! 🏆' : 'Match ended') : (iWon ? 'You won! 🏆' : 'Match finished'),
+          contest.forfeited_by ? 'This match ended by forfeit.' : 'This match has already finished.',
+          true,
+        );
+      } else {
+        mountEngine();
+      }
+    })();
+  </script>
+</body>
+</html>
