@@ -100,6 +100,7 @@
     display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
     padding: 9px; gap: 2px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    transition: background 0.25s;
   }
   #dice-btn:disabled { opacity: 0.4; cursor: default; }
   #dice-btn .pip { border-radius: 50%; background: #222; opacity: 0; }
@@ -107,6 +108,15 @@
     font-size: 0.78rem; color: var(--text-muted);
     background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 10px;
   }
+  @keyframes dice-tumble {
+    0%   { transform: rotate(0deg)   scale(1); }
+    25%  { transform: rotate(100deg) scale(1.1); }
+    50%  { transform: rotate(190deg) scale(0.92); }
+    75%  { transform: rotate(280deg) scale(1.08); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+  #dice-btn.tumbling { animation: dice-tumble 0.65s ease-in-out; }
+  #turn-pill { transition: color 0.25s; }
 
   #overlay {
     position: fixed; inset: 0;
@@ -231,7 +241,7 @@
   <script type="module">
     import { GameEngine, COLORS } from './js/GameEngine.js';
     import { Renderer2D } from './js/Renderer2D.js';
-    import { THEMES } from './js/Modules.js';
+    import { THEMES, DICE_PALETTE, animateDiceRoll } from './js/Modules.js';
 
     const params = new URLSearchParams(window.location.search);
     const contestId    = params.get('contestId');
@@ -392,11 +402,18 @@
       }
     }
 
+    function applyDiceColor(color) {
+      const [c1, c2] = DICE_PALETTE[color] || ['#fff', '#ddd'];
+      diceBtn.style.background = `linear-gradient(160deg, ${c1}, ${c2})`;
+    }
+
     function renderTurn() {
       if (!engine) return;
       const current = engine.currentPlayer;
       const mine = current.id === myPlayer?.user_id;
       turnPill.textContent = mine ? 'Your turn' : `${players.find(p => p.user_id === current.id)?.profiles?.username ?? '...'}'s turn`;
+      turnPill.style.color = (DICE_PALETTE[current.color] || [])[0] || '';
+      applyDiceColor(current.color);
 
       document.querySelectorAll('.pcard').forEach(el => el.classList.remove('active'));
       const card = document.getElementById(`p-${current.color}`);
@@ -469,12 +486,35 @@
         try { state = JSON.parse(state); } catch (e) { console.error('failed to parse game_state', e); return; }
       }
 
+      // If this update is just the server echoing back a roll I already
+      // played locally (and already animated), skip re-animating it.
+      const wasMyAction = actionInFlight;
+      const prevDiceValue = engine.lastDiceValue;
+
       try {
         engine.loadState(state, updatedContest.move_count || 0);
-        renderer.syncTokens(engine.state);
-        renderer.clearSelection();
-        renderTurn();
         actionInFlight = false;
+
+        const diceChanged = engine.lastDiceValue != null && engine.lastDiceValue !== prevDiceValue;
+        if (diceChanged && !wasMyAction) {
+          const finalValue = engine.lastDiceValue;
+          diceBtn.classList.add('tumbling');
+          animateDiceRoll({
+            setFace: renderDiceFace,
+            durationMs: 450,
+            onDone: () => {
+              diceBtn.classList.remove('tumbling');
+              renderDiceFace(finalValue);
+              renderer.syncTokens(engine.state);
+              renderer.clearSelection();
+              renderTurn();
+            },
+          });
+        } else {
+          renderer.syncTokens(engine.state);
+          renderer.clearSelection();
+          renderTurn();
+        }
       } catch (e) {
         console.error('applyServerState threw', e);
       }
@@ -534,6 +574,17 @@
 
       actionInFlight = true;
       const result = engine.roll();
+      const finalValue = engine.lastDiceValue;
+      diceBtn.disabled = true;
+      diceBtn.classList.add('tumbling');
+      diceHint.textContent = 'Rolling…';
+
+      await new Promise((resolve) => {
+        animateDiceRoll({ setFace: renderDiceFace, onDone: resolve });
+      });
+
+      diceBtn.classList.remove('tumbling');
+      renderDiceFace(finalValue);
       renderer.syncTokens(engine.state);
       renderTurn();
 
