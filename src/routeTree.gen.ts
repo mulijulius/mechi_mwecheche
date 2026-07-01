@@ -31,6 +31,7 @@ import { Route as AuthedAdminFinanceRouteImport } from './routes/_authed/admin/f
 import { Route as AuthedAdminApprovalsRouteImport } from './routes/_authed/admin/approvals'
 import { Route as AuthedDashboardLudoIndexRouteImport } from './routes/_authed/dashboard/ludo/index'
 import { Route as AuthedDashboardCheckersIndexRouteImport } from './routes/_authed/dashboard/checkers/index'
+import { Route as AuthedDashboardLudoContestIdRouteImport } from './routes/_authed/dashboard/ludo/$contestId'
 import { Route as AuthedDashboardCheckersContestIdRouteImport } from './routes/_authed/dashboard/checkers/$contestId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -144,6 +145,12 @@ const AuthedDashboardCheckersIndexRoute =
     path: '/checkers/',
     getParentRoute: () => AuthedDashboardRoute,
   } as any)
+const AuthedDashboardLudoContestIdRoute =
+  AuthedDashboardLudoContestIdRouteImport.update({
+    id: '/ludo/$contestId',
+    path: '/ludo/$contestId',
+    getParentRoute: () => AuthedDashboardRoute,
+  } as any)
 const AuthedDashboardCheckersContestIdRoute =
   AuthedDashboardCheckersContestIdRouteImport.update({
     id: '/checkers/$contestId',
@@ -172,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthedAdminIndexRoute
   '/dashboard/': typeof AuthedDashboardIndexRoute
   '/dashboard/checkers/$contestId': typeof AuthedDashboardCheckersContestIdRoute
+  '/dashboard/ludo/$contestId': typeof AuthedDashboardLudoContestIdRoute
   '/dashboard/checkers/': typeof AuthedDashboardCheckersIndexRoute
   '/dashboard/ludo/': typeof AuthedDashboardLudoIndexRoute
 }
@@ -194,6 +202,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthedAdminIndexRoute
   '/dashboard': typeof AuthedDashboardIndexRoute
   '/dashboard/checkers/$contestId': typeof AuthedDashboardCheckersContestIdRoute
+  '/dashboard/ludo/$contestId': typeof AuthedDashboardLudoContestIdRoute
   '/dashboard/checkers': typeof AuthedDashboardCheckersIndexRoute
   '/dashboard/ludo': typeof AuthedDashboardLudoIndexRoute
 }
@@ -220,6 +229,7 @@ export interface FileRoutesById {
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/dashboard/': typeof AuthedDashboardIndexRoute
   '/_authed/dashboard/checkers/$contestId': typeof AuthedDashboardCheckersContestIdRoute
+  '/_authed/dashboard/ludo/$contestId': typeof AuthedDashboardLudoContestIdRoute
   '/_authed/dashboard/checkers/': typeof AuthedDashboardCheckersIndexRoute
   '/_authed/dashboard/ludo/': typeof AuthedDashboardLudoIndexRoute
 }
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/dashboard/'
     | '/dashboard/checkers/$contestId'
+    | '/dashboard/ludo/$contestId'
     | '/dashboard/checkers/'
     | '/dashboard/ludo/'
   fileRoutesByTo: FileRoutesByTo
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/dashboard/checkers/$contestId'
+    | '/dashboard/ludo/$contestId'
     | '/dashboard/checkers'
     | '/dashboard/ludo'
   id:
@@ -293,6 +305,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/'
     | '/_authed/dashboard/'
     | '/_authed/dashboard/checkers/$contestId'
+    | '/_authed/dashboard/ludo/$contestId'
     | '/_authed/dashboard/checkers/'
     | '/_authed/dashboard/ludo/'
   fileRoutesById: FileRoutesById
@@ -462,6 +475,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedDashboardCheckersIndexRouteImport
       parentRoute: typeof AuthedDashboardRoute
     }
+    '/_authed/dashboard/ludo/$contestId': {
+      id: '/_authed/dashboard/ludo/$contestId'
+      path: '/ludo/$contestId'
+      fullPath: '/dashboard/ludo/$contestId'
+      preLoaderRoute: typeof AuthedDashboardLudoContestIdRouteImport
+      parentRoute: typeof AuthedDashboardRoute
+    }
     '/_authed/dashboard/checkers/$contestId': {
       id: '/_authed/dashboard/checkers/$contestId'
       path: '/checkers/$contestId'
@@ -505,6 +525,7 @@ interface AuthedDashboardRouteChildren {
   AuthedDashboardWalletRoute: typeof AuthedDashboardWalletRoute
   AuthedDashboardIndexRoute: typeof AuthedDashboardIndexRoute
   AuthedDashboardCheckersContestIdRoute: typeof AuthedDashboardCheckersContestIdRoute
+  AuthedDashboardLudoContestIdRoute: typeof AuthedDashboardLudoContestIdRoute
   AuthedDashboardCheckersIndexRoute: typeof AuthedDashboardCheckersIndexRoute
   AuthedDashboardLudoIndexRoute: typeof AuthedDashboardLudoIndexRoute
 }
@@ -514,6 +535,7 @@ const AuthedDashboardRouteChildren: AuthedDashboardRouteChildren = {
   AuthedDashboardWalletRoute: AuthedDashboardWalletRoute,
   AuthedDashboardIndexRoute: AuthedDashboardIndexRoute,
   AuthedDashboardCheckersContestIdRoute: AuthedDashboardCheckersContestIdRoute,
+  AuthedDashboardLudoContestIdRoute: AuthedDashboardLudoContestIdRoute,
   AuthedDashboardCheckersIndexRoute: AuthedDashboardCheckersIndexRoute,
   AuthedDashboardLudoIndexRoute: AuthedDashboardLudoIndexRoute,
 }
