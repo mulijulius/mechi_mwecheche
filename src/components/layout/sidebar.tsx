@@ -3,6 +3,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
+  Dices,
   Gamepad2,
   Grid3X3,
   History,
@@ -32,6 +33,7 @@ interface NavItem {
 const playerNav: Array<NavItem> = [
   { to: '/dashboard', label: 'Game floor', icon: Gamepad2 },
   { to: '/dashboard/checkers', label: 'Checkers 3D', icon: Grid3X3 },
+  { to: '/dashboard/ludo', label: 'Ludo', icon: Dices },
   { to: '/dashboard/wallet', label: 'Wallet', icon: Wallet },
   { to: '/dashboard/history', label: 'Match history', icon: History },
 ]
