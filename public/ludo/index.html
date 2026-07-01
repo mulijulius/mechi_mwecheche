@@ -62,9 +62,23 @@
 
   #toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:20px; padding:8px 18px; font-size:0.82rem; z-index:50; opacity:0; pointer-events:none; transition:opacity 0.25s; }
   #toast.show { opacity:1; }
+
+  /* Diagnostic error banner — shows the exact JS error on-screen so it can
+     be screenshotted on mobile, where there's no console access. */
+  #err-banner {
+    position:fixed; left:10px; right:10px; bottom:10px; z-index:9999;
+    background:#3a0d0d; border:1px solid #ff5252; border-radius:10px;
+    padding:10px 12px; font-size:0.72rem; line-height:1.4; color:#ffd7d7;
+    max-height:40vh; overflow-y:auto; display:none; white-space:pre-wrap;
+    font-family:monospace; -webkit-user-select:text; user-select:text;
+  }
+  #err-banner.show { display:block; }
+  #err-banner .err-title { color:#ff8a80; font-weight:700; margin-bottom:4px; font-family:'Segoe UI', system-ui, sans-serif; }
 </style>
 </head>
 <body>
+
+<div id="err-banner"><div class="err-title">⚠ Error caught (screenshot this)</div><div id="err-text"></div></div>
 
 <div id="screen-home" class="screen">
   <div class="setup-card">
@@ -141,6 +155,22 @@
   import { GameEngine } from './js/GameEngine.js';
   import { Renderer2D } from './js/Renderer2D.js';
   import { THEMES, TrialManager } from './js/Modules.js';
+
+  // ── Diagnostic error banner ──────────────────────────────────────────
+  // Catches anything that throws (sync errors, promise rejections, errors
+  // inside the rAF render loop) and prints it on-screen, since this page
+  // is opened as a standalone popup on mobile with no console access.
+  function showFatalError(label, err) {
+    const banner = document.getElementById('err-banner');
+    const text = document.getElementById('err-text');
+    const msg = (err && err.stack) ? err.stack : String(err);
+    text.textContent = `${label}\n${msg}`;
+    banner.classList.add('show');
+    console.error(label, err);
+  }
+  window.addEventListener('error', (e) => showFatalError('window.onerror:', e.error || e.message));
+  window.addEventListener('unhandledrejection', (e) => showFatalError('unhandledrejection:', e.reason));
+  window.addEventListener('ludo-render-error', (e) => showFatalError('Render loop crashed:', e.detail));
 
   // Namespace the free-trial quota to the signed-in user (passed from the
   // dashboard's "Practice vs Computer" launcher). Without this, the quota
@@ -222,6 +252,14 @@
   }
 
   function startMatch() {
+    try {
+      _startMatchInner();
+    } catch (err) {
+      showFatalError('startMatch() crashed:', err);
+    }
+  }
+
+  function _startMatchInner() {
     if (!TrialManager.canPlay()) {
       toast('Daily free match limit reached. Come back tomorrow!');
       return;
