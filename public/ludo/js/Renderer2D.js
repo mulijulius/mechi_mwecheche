@@ -94,12 +94,24 @@ export class Renderer2D {
     this._ro.observe(this.canvas);
     this._onWindowResize = () => this._scheduleResize();
     window.addEventListener('resize', this._onWindowResize);
+    window.addEventListener('orientationchange', this._onWindowResize);
+    // visualViewport fires as mobile Chrome's address bar / toolbar animates
+    // in or out — window 'resize' alone can miss these on some Android
+    // builds, which is the main known cause of a canvas getting stuck at a
+    // stale (sometimes zero) size until the page is force-reloaded (e.g. by
+    // toggling "Desktop site").
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._onWindowResize);
+    }
 
-    // Self-heal: force one more re-measure a couple frames after startup,
+    // Self-heal: force a few more re-measures over the first couple seconds,
     // in case the very first _resize() above ran before the mobile browser
     // had finished settling its real viewport height (e.g. address bar
-    // still animating away). Cheap no-op if the size was already correct.
-    setTimeout(() => this._scheduleResize(), 300);
+    // still animating away), or before the popup window itself had finished
+    // sizing. Cheap no-ops once the size is already correct.
+    for (const delay of [100, 300, 800, 1500]) {
+      setTimeout(() => this._scheduleResize(), delay);
+    }
 
     this._rafId = requestAnimationFrame((t) => this._loop(t));
   }
@@ -206,6 +218,9 @@ export class Renderer2D {
 
   applyTheme(theme) { this.theme = theme; }
 
+  /** Tell the renderer whose turn it is, so that player's yard gets a glow ring. */
+  setActiveColor(color) { this._activeColor = color; }
+
   setCameraAngle(_angle) {} // kept for API parity, no-op in a flat top-down board
 
   // ── Picking ─────────────────────────────────────────────────
@@ -288,6 +303,7 @@ export class Renderer2D {
 
     this._drawFrame(ctx, th);
     this._drawYards(ctx, th);
+    this._drawAvatars(ctx, th);
     this._drawTrack(ctx, th, now);
     this._drawHomeStretches(ctx, th);
     this._drawCenter(ctx, th);
@@ -307,14 +323,92 @@ export class Renderer2D {
     const cell = this._cell;
     for (const color of ['red', 'green', 'yellow', 'blue']) {
       const { row, col } = YARD_BOUNDS[color];
+      const cx = (col + 3) * cell, cy = (row + 3) * cell;
+      const r = cell * 2.55;
+
+      // Big filled token-holder circle (the round colored disc each player's
+      // pieces sit inside, matching a classic Ludo app look).
+      const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.15, cx, cy, r);
+      grad.addColorStop(0, lighten(numToHex(th[color]), 0.12));
+      grad.addColorStop(1, numToHex(th[color]));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1.5, cell * 0.06);
+      ctx.strokeStyle = numToHex(th[`${color}Dark`]);
+      ctx.stroke();
+
+      // Glowing ring around whoever's turn it currently is.
+      if (this._activeColor === color) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + cell * 0.16, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(2, cell * 0.12);
+        ctx.strokeStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = cell * 0.4;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Four small token-slot sockets inside the disc, under YARD_SLOTS.
+      for (const [sr, sc] of YARD_SLOTS[color]) {
+        const scx = sc * cell, scy = sr * cell;
+        ctx.beginPath();
+        ctx.arc(scx, scy, cell * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = numToHex(th[`${color}Dark`]);
+        ctx.globalAlpha = 0.35;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // Corner (in 15x15 grid units) where each yard meets the center cross —
+  // this is where the small player-avatar bubble sits, straddling the yard
+  // and the track, matching the reference board.
+  _avatarAnchor(color) {
+    const { row, col } = YARD_BOUNDS[color];
+    const cornerRow = row === 0 ? 6 : 9;
+    const cornerCol = col === 0 ? 6 : 9;
+    const dr = row === 0 ? -0.55 : 0.55;
+    const dc = col === 0 ? -0.55 : 0.55;
+    return { x: (cornerCol + dc) , y: (cornerRow + dr) };
+  }
+
+  _drawAvatars(ctx, th) {
+    const cell = this._cell;
+    for (const color of ['red', 'green', 'yellow', 'blue']) {
+      const { x, y } = this._avatarAnchor(color);
+      const cx = x * cell, cy = y * cell;
+      const r = cell * 0.62;
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fillStyle = numToHex(th[color]);
-      ctx.globalAlpha = 0.22;
-      ctx.fillRect(col * cell, row * cell, 6 * cell, 6 * cell);
+      ctx.fill();
+      ctx.lineWidth = Math.max(1.5, cell * 0.06);
+      ctx.strokeStyle = '#f0f0e8';
+      ctx.stroke();
+
+      // Simple generic silhouette: head + shoulders, in a darker tone.
+      ctx.fillStyle = numToHex(th[`${color}Dark`]);
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.arc(cx, cy - r * 0.32, r * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy + r * 0.62, r * 0.62, Math.PI, 0);
+      ctx.fill();
       ctx.globalAlpha = 1;
 
-      ctx.strokeStyle = numToHex(th[`${color}Dark`]);
-      ctx.lineWidth = Math.max(1, cell * 0.05);
-      ctx.strokeRect(col * cell + cell * 0.6, row * cell + cell * 0.6, 4.8 * cell, 4.8 * cell);
+      if (this._activeColor === color) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + cell * 0.08, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(1.5, cell * 0.08);
+        ctx.strokeStyle = '#00ff88';
+        ctx.stroke();
+      }
     }
   }
 
@@ -498,12 +592,32 @@ export class Renderer2D {
     this._boardY   = (cssH - avail) / 2 + this._framePad;
   }
 
+  /** CSS-pixel anchor (relative to the canvas element) for each color's
+   *  name/percentage label, placed just outside its yard circle. */
+  getYardLabelAnchors() {
+    const cell = this._cell;
+    const out = {};
+    for (const color of ['red', 'green', 'yellow', 'blue']) {
+      const { row, col } = YARD_BOUNDS[color];
+      const cx = this._boardX + (col + 3) * cell;
+      const cyCenter = this._boardY + (row + 3) * cell;
+      const r = cell * 2.55;
+      const y = row === 0 ? (cyCenter - r - cell * 0.5) : (cyCenter + r + cell * 0.5);
+      out[color] = { x: cx, y, topAligned: row !== 0 };
+    }
+    return out;
+  }
+
   onResize() { this._resize(); }
 
   destroy() {
     cancelAnimationFrame(this._rafId);
     if (this._ro) this._ro.disconnect();
-    if (this._onWindowResize) window.removeEventListener('resize', this._onWindowResize);
+    if (this._onWindowResize) {
+      window.removeEventListener('resize', this._onWindowResize);
+      window.removeEventListener('orientationchange', this._onWindowResize);
+      if (window.visualViewport) window.visualViewport.removeEventListener('resize', this._onWindowResize);
+    }
   }
 }
 
