@@ -21,28 +21,29 @@
     -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
+  body { display: flex; flex-direction: column; }
 
-  #topbar {
-    position: fixed; top: 0; left: 0; right: 0;
-    height: 52px;
-    display: flex; align-items: center; gap: 10px;
-    padding: 0 10px;
-    background: rgba(0,0,0,0.55);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    z-index: 20;
-    backdrop-filter: blur(6px);
+  #icon-bar {
+    height: 52px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px;
   }
-  #topbar button {
-    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
-    color: var(--text); border-radius: 8px; padding: 7px 10px;
-    font-size: 0.8rem; cursor: pointer;
+  #icon-bar .icon-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #c9915a; border: 2px solid #8a5a2e; color: #3a2410;
+    font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
   }
-  #topbar button:hover { background: rgba(255,255,255,0.16); }
-  #topbar button.danger {
-    border-color: rgba(229,57,53,0.45); color: #FF8A80;
-    background: rgba(229,57,53,0.12);
+  #icon-bar .icon-btn.danger { background: #d9564f; border-color: #7a1f1a; color: #fff0ee; }
+  #icon-bar .icon-group { display: flex; gap: 8px; }
+
+  #status-row {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 0 12px 4px;
+    font-size: 0.76rem;
   }
-  #topbar button.danger:hover { background: rgba(229,57,53,0.22); }
   #room-code { font-family: monospace; color: var(--gold); font-weight: 700; }
   .pill {
     font-size: 0.72rem; padding: 3px 9px; border-radius: 999px;
@@ -50,35 +51,22 @@
   }
   .pill-live { color: #6CE39A; border-color: rgba(108,227,154,0.4); background: rgba(108,227,154,0.08); }
   .pill-wait { color: #FFD180; border-color: rgba(255,209,128,0.4); background: rgba(255,209,128,0.08); }
-  #topbar .spacer { flex: 1; }
-  #turn-pill { font-weight: 700; }
 
-  #players {
-    position: fixed; top: 52px; left: 0; right: 0;
-    display: flex; justify-content: center; flex-wrap: wrap; gap: 6px;
-    padding: 6px 12px;
-    font-size: 0.76rem;
-    z-index: 15;
-    pointer-events: none;
+  #turn-banner {
+    flex-shrink: 0; text-align: center; font-weight: 700; font-size: 1.05rem;
+    padding: 2px 0 10px; transition: color 0.25s;
   }
-  .pcard {
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(0,0,0,0.45);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 999px;
-    padding: 4px 10px 4px 6px;
+
+  .plabel {
+    position: absolute; transform: translate(-50%, -50%);
+    font-weight: 700; font-size: 0.8rem; white-space: nowrap;
+    pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    transition: color 0.25s;
   }
-  .pcard.active { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.25); }
-  .pcard.left { opacity: 0.4; text-decoration: line-through; }
-  .pdot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
-  .pdot.red    { background: radial-gradient(circle at 35% 35%, #ff8a80, #B71C1C); }
-  .pdot.green  { background: radial-gradient(circle at 35% 35%, #a5f3c2, #1B5E20); }
-  .pdot.yellow { background: radial-gradient(circle at 35% 35%, #fff2a8, #F57F17); }
-  .pdot.blue   { background: radial-gradient(circle at 35% 35%, #a8d8ff, #0D47A1); }
+  #players-strip { position: absolute; inset: 0; pointer-events: none; }
 
   #canvas-wrap {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: center;
+    position: relative; flex: 1; min-height: 0;
   }
   #game-canvas {
     width: 100%; height: 100%;
@@ -89,16 +77,16 @@
 
   /* ── Dice control ────────────────────────────────────────── */
   #dice-dock {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
     z-index: 18;
     display: flex; align-items: center; gap: 14px;
   }
   #dice-btn {
-    width: 64px; height: 64px; border-radius: 14px;
+    width: 60px; height: 60px; border-radius: 16px;
     background: linear-gradient(160deg, #fff, #ddd);
-    border: none; cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.5); cursor: pointer;
     display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
-    padding: 9px; gap: 2px;
+    padding: 8px; gap: 2px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.5);
     transition: background 0.25s;
   }
@@ -116,7 +104,6 @@
     100% { transform: rotate(360deg) scale(1); }
   }
   #dice-btn.tumbling { animation: dice-tumble 0.65s ease-in-out; }
-  #turn-pill { transition: color 0.25s; }
 
   #overlay {
     position: fixed; inset: 0;
@@ -191,28 +178,35 @@
 </head>
 <body>
 
-  <div id="topbar">
-    <button id="btn-lobby">← Lobby</button>
-    <button id="btn-leave" class="danger">Leave Match</button>
+  <div id="icon-bar">
+    <button class="icon-btn danger" id="btn-leave" title="Leave match">✕</button>
+    <div class="icon-group">
+      <button class="icon-btn" id="btn-lobby" title="Lobby">↩</button>
+      <button class="icon-btn" id="btn-rules-toggle" title="Rules">⚖</button>
+      <button class="icon-btn" id="btn-favorite" title="Favorite">★</button>
+      <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+      <button class="icon-btn" id="btn-emoji" title="React">🙂</button>
+    </div>
+  </div>
+
+  <div id="status-row">
     <span id="room-code">—</span>
     <span id="status-pill" class="pill pill-wait">Connecting…</span>
-    <div class="spacer"></div>
-    <span id="turn-pill" class="pill">—</span>
   </div>
 
-  <div id="players"></div>
+  <div id="turn-banner">—</div>
 
   <div id="canvas-wrap">
+    <div id="players-strip"></div>
     <canvas id="game-canvas"></canvas>
-  </div>
-
-  <div id="dice-dock">
-    <button id="dice-btn" title="Roll">
-      <span class="pip" id="pip-0"></span><span class="pip" id="pip-1"></span><span class="pip" id="pip-2"></span>
-      <span class="pip" id="pip-3"></span><span class="pip" id="pip-4"></span><span class="pip" id="pip-5"></span>
-      <span class="pip" id="pip-6"></span><span class="pip" id="pip-7"></span><span class="pip" id="pip-8"></span>
-    </button>
-    <span id="dice-hint">—</span>
+    <div id="dice-dock">
+      <button id="dice-btn" title="Roll">
+        <span class="pip" id="pip-0"></span><span class="pip" id="pip-1"></span><span class="pip" id="pip-2"></span>
+        <span class="pip" id="pip-3"></span><span class="pip" id="pip-4"></span><span class="pip" id="pip-5"></span>
+        <span class="pip" id="pip-6"></span><span class="pip" id="pip-7"></span><span class="pip" id="pip-8"></span>
+      </button>
+      <span id="dice-hint">—</span>
+    </div>
   </div>
 
   <div id="overlay" class="show">
@@ -257,13 +251,13 @@
     const confirmTitle   = $('#confirm-title');
     const confirmSub     = $('#confirm-sub');
     const statusPill     = $('#status-pill');
-    const turnPill       = $('#turn-pill');
+    const turnBanner     = $('#turn-banner');
     const roomCodeEl     = $('#room-code');
     const toastEl        = $('#toast');
     const canvas         = $('#game-canvas');
     const btnLobby       = $('#btn-lobby');
     const btnLeave       = $('#btn-leave');
-    const playersStrip   = $('#players');
+    const playersStrip   = $('#players-strip');
     const diceBtn        = $('#dice-btn');
     const diceHint       = $('#dice-hint');
 
@@ -292,6 +286,26 @@
 
     function goToLobby() { window.location.href = lobbyUrl; }
     btnLobby.addEventListener('click', goToLobby);
+
+    $('#btn-rules-toggle').addEventListener('click', () => {
+      toast('Roll a 6 to leave your yard. Land on an opponent to send them home (unless on a safe star). Get all 4 tokens to the center to win.');
+    });
+    let favorited = false;
+    $('#btn-favorite').addEventListener('click', () => {
+      favorited = !favorited;
+      $('#btn-favorite').style.color = favorited ? '#FFD700' : '';
+      toast(favorited ? 'Added to favorites' : 'Removed from favorites');
+    });
+    let soundOn = true;
+    $('#btn-sound').addEventListener('click', () => {
+      soundOn = !soundOn;
+      $('#btn-sound').textContent = soundOn ? '🔊' : '🔇';
+      toast(soundOn ? 'Sound on' : 'Sound off');
+    });
+    const REACTIONS = ['😀', '😂', '😮', '👏', '😤'];
+    $('#btn-emoji').addEventListener('click', () => {
+      toast(REACTIONS[Math.floor(Math.random() * REACTIONS.length)]);
+    });
 
     if (!contestId || !supabaseUrl || !supabaseKey) {
       showOverlay('Missing match info', 'This window was not opened correctly from the lobby.', true);
@@ -393,12 +407,34 @@
 
       playersStrip.innerHTML = '';
       for (const p of players) {
-        const card = document.createElement('div');
-        card.className = 'pcard';
-        card.id = `p-${p.color}`;
-        if (p.left_at) card.classList.add('left');
-        card.innerHTML = `<span class="pdot ${p.color}"></span><span>${p.profiles?.username ?? '—'}</span>`;
-        playersStrip.appendChild(card);
+        const label = document.createElement('div');
+        label.className = 'plabel';
+        label.id = `p-${p.color}`;
+        if (p.left_at) label.style.opacity = '0.4';
+        playersStrip.appendChild(label);
+      }
+      positionPlayerLabels();
+    }
+
+    function playerPercent(color) {
+      if (!engine) return 0;
+      const pl = engine.state.players.find(pp => pp.color === color);
+      if (!pl) return 0;
+      const finished = pl.tokens.filter(t => t.state === 'finished').length;
+      return Math.round((finished / 4) * 100);
+    }
+
+    function positionPlayerLabels() {
+      if (!renderer) return;
+      const anchors = renderer.getYardLabelAnchors();
+      for (const p of players) {
+        const el = document.getElementById(`p-${p.color}`);
+        if (!el) continue;
+        const a = anchors[p.color];
+        el.style.left = `${a.x}px`;
+        el.style.top = `${a.y}px`;
+        el.textContent = `${p.profiles?.username ?? '—'}${p.left_at ? ' (left)' : ''} (${playerPercent(p.color)}%)`;
+        el.style.color = (DICE_PALETTE[p.color] || [])[0] || 'var(--text)';
       }
     }
 
@@ -411,13 +447,11 @@
       if (!engine) return;
       const current = engine.currentPlayer;
       const mine = current.id === myPlayer?.user_id;
-      turnPill.textContent = mine ? 'Your turn' : `${players.find(p => p.user_id === current.id)?.profiles?.username ?? '...'}'s turn`;
-      turnPill.style.color = (DICE_PALETTE[current.color] || [])[0] || '';
+      turnBanner.textContent = mine ? 'Your turn now..' : `${players.find(p => p.user_id === current.id)?.profiles?.username ?? '...'}'s turn now..`;
+      turnBanner.style.color = (DICE_PALETTE[current.color] || [])[0] || '';
       applyDiceColor(current.color);
-
-      document.querySelectorAll('.pcard').forEach(el => el.classList.remove('active'));
-      const card = document.getElementById(`p-${current.color}`);
-      if (card) card.classList.add('active');
+      renderer.setActiveColor(current.color);
+      positionPlayerLabels();
 
       const canRoll = mine && engine.phase === 'rolling' && engine.status === 'playing';
       diceBtn.disabled = !canRoll;
@@ -449,6 +483,9 @@
       const themeKey = contest.theme || 'classic';
       const theme = { id: themeKey, ...THEMES[themeKey] };
       renderer = new Renderer2D(canvas, theme);
+      window.addEventListener('resize', positionPlayerLabels);
+      window.addEventListener('orientationchange', positionPlayerLabels);
+      for (const delay of [150, 400, 900, 1600]) setTimeout(positionPlayerLabels, delay);
 
       const orderedPlayerIds = players.slice().sort((a, b) => a.seat - b.seat).map(p => p.user_id);
       engine = new GameEngine({ matchId: contestId, playerIds: orderedPlayerIds, themePreset: themeKey });
