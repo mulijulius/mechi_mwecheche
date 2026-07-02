@@ -1,0 +1,47 @@
+-- ============================================================================
+-- Migration: 0010_ludo_realtime_publication.sql
+-- Purpose:   Make sure public.ludo_contests and public.ludo_contest_players
+--            are actually part of the `supabase_realtime` publication.
+--
+-- Root cause of "opponent's dice roll / move never shows up on my screen":
+-- make_ludo_move() (0009) correctly persists every roll and move to
+-- ludo_contests.game_state, and every client subscribes to postgres_changes
+-- on that row expecting to be notified. But Postgres only broadcasts
+-- postgres_changes for tables that are members of the `supabase_realtime`
+-- publication — and no earlier migration ever added these two tables to it
+-- (this is normally done as a one-off dashboard toggle, which was done for
+-- the checkers tables but missed for the newer Ludo ones). Without
+-- membership, every write still succeeds silently, but no other seated
+-- client is ever told about it — matching exactly the symptom of dice/turn
+-- state looking frozen for everyone except the player who just acted.
+--
+-- This is idempotent: ADD TABLE only runs if the table isn't already a
+-- member, so re-running this migration (or it having partially applied
+-- already via the dashboard) is harmless.
+-- ============================================================================
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'ludo_contests'
+  ) then
+    alter publication supabase_realtime add table public.ludo_contests;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'ludo_contest_players'
+  ) then
+    alter publication supabase_realtime add table public.ludo_contest_players;
+  end if;
+end $$;
+
+-- Full row images on UPDATE (not just changed columns) so payload.new in the
+-- client's postgres_changes handler always has the complete game_state,
+-- current_seat, etc. — matches what 0006 relies on for checkers_contests.
+alter table public.ludo_contests replica identity full;
