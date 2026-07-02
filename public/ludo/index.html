@@ -34,20 +34,18 @@
 
   /* ── Game screen ─────────────────────────────────────────── */
   #screen-game { display:flex; flex-direction:column; }
-  #game-topbar { height:48px; display:flex; align-items:center; gap:10px; padding:0 12px; background:rgba(0,0,0,0.5); border-bottom:1px solid rgba(255,255,255,0.08); }
-  #game-topbar button { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:var(--text); border-radius:8px; padding:6px 10px; font-size:0.78rem; cursor:pointer; }
-  #turn-indicator { flex:1; text-align:center; font-weight:700; font-size:0.85rem; }
+  #icon-bar { height:52px; display:flex; align-items:center; justify-content:space-between; padding:0 14px; flex-shrink:0; }
+  #icon-bar .icon-btn { width:38px; height:38px; border-radius:50%; background:#c9915a; border:2px solid #8a5a2e; color:#3a2410; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.4); }
+  #icon-bar .icon-group { display:flex; gap:8px; }
+  #turn-banner { text-align:center; font-weight:700; font-size:1.05rem; padding:6px 0 10px; transition:color 0.25s; flex-shrink:0; }
   #canvas-wrap { position:relative; flex:1; }
   #game-canvas { width:100%; height:100%; display:block; touch-action:none; cursor:pointer; }
 
-  #players-strip { position:absolute; top:8px; left:0; right:0; display:flex; justify-content:center; gap:6px; flex-wrap:wrap; pointer-events:none; }
-  .pcard { display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px 4px 6px; font-size:0.74rem; }
-  .pcard.active { border-color:var(--gold); }
-  .pdot { width:10px; height:10px; border-radius:50%; }
-  .pdot.red{background:#E53935;} .pdot.green{background:#43A047;} .pdot.yellow{background:#FBC02D;} .pdot.blue{background:#1E88E5;}
+  .plabel { position:absolute; transform:translate(-50%, -50%); font-weight:700; font-size:0.8rem; white-space:nowrap; pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,0.6); transition:color 0.25s; }
+  #players-strip { position:absolute; inset:0; pointer-events:none; }
 
   #dice-dock { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; }
-  #dice-btn { width:58px; height:58px; border-radius:13px; background:linear-gradient(160deg,#fff,#ddd); border:none; cursor:pointer; display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr 1fr; padding:8px; gap:2px; box-shadow:0 4px 14px rgba(0,0,0,0.5); transition:background 0.25s; }
+  #dice-btn { width:60px; height:60px; border-radius:16px; background:linear-gradient(160deg,#fff,#ddd); border:2px solid rgba(255,255,255,0.5); cursor:pointer; display:grid; grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr 1fr; padding:8px; gap:2px; box-shadow:0 4px 14px rgba(0,0,0,0.5); transition:background 0.25s; }
   #dice-btn:disabled { opacity:0.4; cursor:default; }
   #dice-btn .pip { border-radius:50%; background:#222; opacity:0; }
   #dice-hint { font-size:0.74rem; color:var(--muted); background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; }
@@ -59,7 +57,6 @@
     100% { transform: rotate(360deg) scale(1); }
   }
   #dice-btn.tumbling { animation: dice-tumble 0.65s ease-in-out; }
-  #turn-indicator { transition: color 0.25s; }
 
   #result-modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:40; padding:24px; }
   .modal-card { background:#1a1a1a; border:1px solid rgba(255,215,0,0.3); border-radius:16px; padding:26px; text-align:center; max-width:340px; width:100%; }
@@ -127,11 +124,17 @@
 </div>
 
 <div id="screen-game" class="screen hidden">
-  <div id="game-topbar">
-    <button id="btn-menu">⌂ Menu</button>
-    <div id="turn-indicator">—</div>
-    <button id="btn-theme-cycle">🎨 Theme</button>
+  <div id="icon-bar">
+    <button class="icon-btn" id="btn-menu" title="Menu">✕</button>
+    <div class="icon-group">
+      <button class="icon-btn" id="btn-rules-toggle" title="Rules">⚖</button>
+      <button class="icon-btn" id="btn-theme-cycle" title="Board theme">☰</button>
+      <button class="icon-btn" id="btn-favorite" title="Favorite">★</button>
+      <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+      <button class="icon-btn" id="btn-emoji" title="React">🙂</button>
+    </div>
   </div>
+  <div id="turn-banner">—</div>
   <div id="canvas-wrap">
     <div id="players-strip"></div>
     <canvas id="game-canvas"></canvas>
@@ -304,6 +307,10 @@
       e.preventDefault();
     }, { passive: false });
 
+    window.addEventListener('resize', positionPlayerLabels);
+    window.addEventListener('orientationchange', positionPlayerLabels);
+    for (const delay of [150, 400, 900, 1600]) setTimeout(positionPlayerLabels, delay);
+
     maybeRunAITurn();
   }
 
@@ -311,11 +318,30 @@
     const strip = $('#players-strip');
     strip.innerHTML = '';
     engine.state.players.forEach((p, i) => {
-      const card = document.createElement('div');
-      card.className = 'pcard';
-      card.id = `p-${p.color}`;
-      card.innerHTML = `<span class="pdot ${p.color}"></span><span>${seatNames[i]}${seatIsAI[i] ? ' 🤖' : ''}</span>`;
-      strip.appendChild(card);
+      const label = document.createElement('div');
+      label.className = 'plabel';
+      label.id = `p-${p.color}`;
+      strip.appendChild(label);
+    });
+    positionPlayerLabels();
+  }
+
+  function playerPercent(player) {
+    const finished = player.tokens.filter(t => t.state === 'finished').length;
+    return Math.round((finished / 4) * 100);
+  }
+
+  function positionPlayerLabels() {
+    if (!renderer || !engine) return;
+    const anchors = renderer.getYardLabelAnchors();
+    engine.state.players.forEach((p, i) => {
+      const el = $(`#p-${p.color}`);
+      if (!el) return;
+      const a = anchors[p.color];
+      el.style.left = `${a.x}px`;
+      el.style.top = `${a.y}px`;
+      el.textContent = `${seatNames[i]}${seatIsAI[i] ? ' 🤖' : ''} (${playerPercent(p)}%)`;
+      el.style.color = (DICE_PALETTE[p.color] || [])[0] || 'var(--text)';
     });
   }
 
@@ -327,12 +353,12 @@
   function renderTurn() {
     const current = engine.currentPlayer;
     const idx = engine.state.players.indexOf(current);
-    $('#turn-indicator').textContent = `${seatNames[idx]}'s turn`;
-    $('#turn-indicator').style.color = (DICE_PALETTE[current.color] || [])[0] || 'var(--text)';
+    const color = (DICE_PALETTE[current.color] || [])[0] || 'var(--text)';
+    $('#turn-banner').textContent = `${seatNames[idx]}'s turn now..`;
+    $('#turn-banner').style.color = color;
     applyDiceColor(current.color);
-
-    document.querySelectorAll('.pcard').forEach(el => el.classList.remove('active'));
-    $(`#p-${current.color}`)?.classList.add('active');
+    renderer.setActiveColor(current.color);
+    positionPlayerLabels();
 
     const isHumanTurn = !seatIsAI[idx];
     const canRoll = isHumanTurn && engine.phase === 'rolling' && engine.status === 'playing';
@@ -478,6 +504,8 @@
     $('#result-modal').classList.add('hidden');
     $('#screen-game').classList.add('hidden');
     $('#screen-home').classList.remove('hidden');
+    window.removeEventListener('resize', positionPlayerLabels);
+    window.removeEventListener('orientationchange', positionPlayerLabels);
     if (renderer) { renderer.destroy(); renderer = null; }
     engine = null;
   }
@@ -488,6 +516,29 @@
     themeId = THEME_CYCLE[(THEME_CYCLE.indexOf(themeId) + 1) % THEME_CYCLE.length];
     renderer.applyTheme({ id: themeId, ...THEMES[themeId] });
     toast(THEMES[themeId].name);
+  });
+
+  $('#btn-rules-toggle').addEventListener('click', () => {
+    toast('Roll a 6 to leave your yard. Land on an opponent to send them home (unless on a safe star). Get all 4 tokens to the center to win.');
+  });
+
+  let favorited = false;
+  $('#btn-favorite').addEventListener('click', () => {
+    favorited = !favorited;
+    $('#btn-favorite').style.color = favorited ? '#FFD700' : '';
+    toast(favorited ? 'Added to favorites' : 'Removed from favorites');
+  });
+
+  let soundOn = true;
+  $('#btn-sound').addEventListener('click', () => {
+    soundOn = !soundOn;
+    $('#btn-sound').textContent = soundOn ? '🔊' : '🔇';
+    toast(soundOn ? 'Sound on' : 'Sound off');
+  });
+
+  const REACTIONS = ['😀', '😂', '😮', '👏', '😤'];
+  $('#btn-emoji').addEventListener('click', () => {
+    toast(REACTIONS[Math.floor(Math.random() * REACTIONS.length)]);
   });
 
   $('#btn-start').addEventListener('click', startMatch);
