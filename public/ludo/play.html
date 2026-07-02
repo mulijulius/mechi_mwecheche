@@ -745,8 +745,42 @@
         }
       });
 
+    // ── Poll fallback ──────────────────────────────────────────────────
+    // Realtime should deliver every roll/move instantly, but if a socket
+    // event is ever dropped (brief disconnect, backgrounded tab resuming,
+    // etc.) this makes sure the board can never get permanently stuck out
+    // of sync — it just quietly catches up within a couple seconds.
+    let lastSeenMoveCount = -1;
+    const pollTimer = setInterval(async () => {
+      if (!contestId || hasLeftOrEnded) return;
+      try {
+        const { data } = await supabase
+          .from('ludo_contests')
+          .select('*')
+          .eq('id', contestId)
+          .single();
+        if (!data) return;
+        if (lastSeenMoveCount === -1) lastSeenMoveCount = data.move_count || 0;
+        if ((data.move_count || 0) !== lastSeenMoveCount) {
+          lastSeenMoveCount = data.move_count || 0;
+          contest = data;
+          renderHeader();
+          if (!engine) {
+            await loadContestAndPlayers();
+            renderHeader();
+            mountEngine();
+          } else {
+            applyServerState(contest);
+          }
+        }
+      } catch (e) {
+        // Silent — this is a best-effort safety net, not the primary path.
+      }
+    }, 3000);
+
     window.addEventListener('beforeunload', () => {
       supabase.removeChannel(channel);
+      clearInterval(pollTimer);
       if (renderer) renderer.destroy();
     });
 
