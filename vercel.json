@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/((?!checkers/|ludo/).*)", "destination": "/index.html" }
+    { "source": "/((?!.*\\..*).*)", "destination": "/index.html" }
   ]
 }
