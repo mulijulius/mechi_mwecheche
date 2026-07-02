@@ -41,11 +41,16 @@ const HOME_STRETCH_COORDS = {
 
 const CENTER_COORD = [7, 7];
 
+// Token-holder slots inside each yard: a small 2x2 grid centered exactly on
+// that yard's circle center (row+3, col+3 — see YARD_BOUNDS/_drawYards),
+// offset by 1.05 grid units so the four tokens sit evenly spaced well
+// inside the rim (circle radius is 2.55*cell, token radius is 0.32*cell,
+// so 1.05 + 0.32 ≈ 1.37 leaves plenty of clearance either way).
 const YARD_SLOTS = {
-  red:    [[1.3,1.3],[1.3,4.3],[4.3,1.3],[4.3,4.3]],
-  green:  [[1.3,9.7],[1.3,12.7],[4.3,9.7],[4.3,12.7]],
-  yellow: [[9.7,9.7],[9.7,12.7],[12.7,9.7],[12.7,12.7]],
-  blue:   [[9.7,1.3],[9.7,4.3],[12.7,1.3],[12.7,4.3]],
+  red:    [[1.95,1.95],[1.95,4.05],[4.05,1.95],[4.05,4.05]],
+  green:  [[1.95,10.95],[1.95,13.05],[4.05,10.95],[4.05,13.05]],
+  yellow: [[10.95,10.95],[10.95,13.05],[13.05,10.95],[13.05,13.05]],
+  blue:   [[10.95,1.95],[10.95,4.05],[13.05,1.95],[13.05,4.05]],
 };
 
 const YARD_BOUNDS = {
