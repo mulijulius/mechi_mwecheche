@@ -1,0 +1,108 @@
+/* ============================================================
+   dice3d.css — shallow felt-lined dice tray + a real 3D cube die
+   Shared by index.html (practice) and play.html (live match).
+   Paired with js/Dice3D.js, which drives the roll animation.
+   ============================================================ */
+
+.d3-scene {
+  width: 140px;
+  max-width: 40vw;
+  aspect-ratio: 3 / 2;
+  margin: 0 auto;
+  perspective: 900px;
+  perspective-origin: 50% 30%;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.d3-scene.d3-disabled { cursor: default; }
+.d3-scene.d3-disabled .d3-stage { opacity: 0.55; }
+
+.d3-stage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(60deg);
+  transition: opacity 0.2s;
+}
+
+/* Wood-trimmed outer border */
+.d3-tray-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #8a5a34, #6b4023 40%, #7a4c2a 60%, #5c3620);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35), inset 0 2px 3px rgba(255, 255, 255, 0.15);
+}
+
+/* Teal felt floor, slightly recessed */
+.d3-felt {
+  position: absolute;
+  inset: 5%;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 40% 30%, #2f7d6e, #1f5e52 70%, #184a41);
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 -2px 6px rgba(0, 0, 0, 0.3);
+  transform-style: preserve-3d;
+}
+
+.d3-shadow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 82px;
+  height: 82px;
+  margin-left: -41px;
+  margin-top: -41px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 70%);
+  opacity: 0.4;
+  will-change: transform, opacity, filter;
+  pointer-events: none;
+}
+
+.d3-cube {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  margin-top: -36px;
+  transform-style: preserve-3d;
+  will-change: transform, filter;
+}
+
+.d3-face {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  background: #f5f3ee;
+  border: 1px solid #d8d4c8;
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 10px;
+  box-sizing: border-box;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.08);
+}
+
+.d3-pip {
+  align-self: center;
+  justify-self: center;
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: #1c1c1c;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+.d3-pip.d3-pip-hidden { background: transparent; box-shadow: none; }
+
+/* Standard CSS-cube face placement (size = 72px, half = 36px) */
+.d3-front  { transform: translateZ(36px); }
+.d3-back   { transform: rotateY(180deg) translateZ(36px); }
+.d3-right  { transform: rotateY(90deg)  translateZ(36px); }
+.d3-left   { transform: rotateY(-90deg) translateZ(36px); }
+.d3-top    { transform: rotateX(90deg)  translateZ(36px); }
+.d3-bottom { transform: rotateX(-90deg) translateZ(36px); }
