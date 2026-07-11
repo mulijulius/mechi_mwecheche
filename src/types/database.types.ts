@@ -3,6 +3,13 @@
 // 0006_checkers_move_sync.sql, 0007_checkers_zero_stake_payout_fix.sql,
 // 0008_ludo_matchmaking.sql, and 0009_ludo_move_sync.sql.
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
+// 0010_ludo_realtime_publication.sql and 0011_paynexus_payments.sql have been
+// folded in by hand below — re-run the command above to get an authoritative
+// version once you have a moment.
+
+// Standard Supabase-generated helper for jsonb columns. paynexus_payments is
+// the first table here with one (raw_webhook_payload).
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Array<Json>
 
 export type GameSlug = 'ludo' | 'checkers' | 'chess' | 'billiards' | 'solitaire'
 
@@ -562,6 +569,63 @@ export interface Database {
           { foreignKeyName: 'ludo_trial_usage_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
         ]
       }
+      paynexus_payments: {
+        Row: {
+          id: string
+          user_id: string
+          transaction_id: string
+          status: TransactionStatus
+          amount_cents: number
+          phone: string
+          reference: string
+          checkout_request_id: string | null
+          merchant_request_id: string | null
+          payment_id_external: number | null
+          idempotency_key: string
+          mpesa_receipt: string | null
+          raw_webhook_payload: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          transaction_id: string
+          status?: TransactionStatus
+          amount_cents: number
+          phone: string
+          reference: string
+          checkout_request_id?: string | null
+          merchant_request_id?: string | null
+          payment_id_external?: number | null
+          idempotency_key: string
+          mpesa_receipt?: string | null
+          raw_webhook_payload?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          transaction_id?: string
+          status?: TransactionStatus
+          amount_cents?: number
+          phone?: string
+          reference?: string
+          checkout_request_id?: string | null
+          merchant_request_id?: string | null
+          payment_id_external?: number | null
+          idempotency_key?: string
+          mpesa_receipt?: string | null
+          raw_webhook_payload?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'paynexus_payments_user_id_fkey'; columns: ['user_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'paynexus_payments_transaction_id_fkey'; columns: ['transaction_id']; referencedRelation: 'transactions'; referencedColumns: ['id'] },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -685,6 +749,28 @@ export interface Database {
           room_code: string
           created_at: string
         }>
+      }
+      paynexus_create_pending_deposit: {
+        Args: {
+          p_user_id: string
+          p_amount_cents: number
+          p_phone: string
+          p_reference: string
+          p_checkout_request_id: string
+          p_merchant_request_id: string
+          p_payment_id_external: number
+          p_idempotency_key: string
+        }
+        Returns: string // new paynexus_payments.id
+      }
+      paynexus_resolve_deposit: {
+        Args: {
+          p_reference: string
+          p_new_status: TransactionStatus
+          p_mpesa_receipt: string | null
+          p_raw_payload: Json
+        }
+        Returns: string // 'ok' | 'not_found' | 'already_resolved' | 'invalid_status'
       }
     }
     Enums: {
