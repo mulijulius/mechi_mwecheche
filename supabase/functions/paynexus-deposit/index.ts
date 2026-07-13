@@ -7,7 +7,7 @@
 //
 // Flow:
 //   1. Validate the amount + phone the player entered.
-//   2. Ask PayNexus to send an STK Push (POST /api/payments/initiate),
+//   2. Ask PayNexus to send an STK Push (POST /api/mpesa/payment/initiate),
 //      authenticated with the secret key (server-side only).
 //   3. On success, atomically write a 'pending' transactions row +
 //      paynexus_payments row (via the paynexus_create_pending_deposit RPC)
@@ -27,14 +27,20 @@ interface DepositRequest {
   phone?: string // any common Kenyan format, e.g. 0712345678 or 254712345678
 }
 
+// Matches PayNexus's actual documented response shape
+// (https://paynexus.co.ke/docs/stk-push) — note there is no payment_id or
+// merchant_request_id field. An earlier version of this function assumed
+// fields that don't exist in PayNexus's real API, which — combined with the
+// wrong endpoint path below — was why deposits were failing.
 interface PayNexusInitiateResponse {
   success: boolean
   message?: string
   data?: {
-    payment_id: number
     reference: string
     checkout_request_id: string
-    merchant_request_id: string
+    amount: number
+    phone: string
+    status: string
   }
 }
 
@@ -95,7 +101,13 @@ export default {
 
     let payNexusRes: Response
     try {
-      payNexusRes = await fetch(`${PAYNEXUS_BASE_URL}/api/payments/initiate`, {
+      // PayNexus's real STK Push endpoint is /api/mpesa/payment/initiate —
+      // NOT /api/payments/initiate. The old path doesn't exist on their
+      // server at all, which is why every deposit attempt was failing with
+      // "Could not reach the payment gateway." Their documented request
+      // body only takes amount, phone, and description — account_reference
+      // and idempotency_key aren't part of their API, so they're dropped.
+      payNexusRes = await fetch(`${PAYNEXUS_BASE_URL}/api/mpesa/payment/initiate`, {
         method: 'POST',
         headers: {
           'X-API-Key': secretKey,
@@ -105,8 +117,6 @@ export default {
           amount,
           phone,
           description: 'SkillForge Arena wallet deposit',
-          account_reference: `user-${userId.slice(0, 8)}`,
-          idempotency_key: idempotencyKey,
         }),
       })
     } catch (err) {
@@ -130,7 +140,7 @@ export default {
       })
     }
 
-    const { reference, checkout_request_id, merchant_request_id, payment_id } = payNexusJson.data
+    const { reference, checkout_request_id } = payNexusJson.data
 
     const { data: paymentRowId, error } = await ctx.supabaseAdmin.rpc('paynexus_create_pending_deposit', {
       p_user_id: userId,
@@ -138,8 +148,11 @@ export default {
       p_phone: phone,
       p_reference: reference,
       p_checkout_request_id: checkout_request_id,
-      p_merchant_request_id: merchant_request_id,
-      p_payment_id_external: payment_id,
+      // PayNexus's real API doesn't return a separate merchant_request_id
+      // or numeric payment_id (only checkout_request_id + reference), so
+      // these are stored as null. The columns allow it — see 0011.
+      p_merchant_request_id: null,
+      p_payment_id_external: null,
       p_idempotency_key: idempotencyKey,
     })
 
