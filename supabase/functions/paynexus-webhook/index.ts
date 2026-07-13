@@ -27,10 +27,15 @@ interface PayNexusWebhookPayload {
 }
 
 // PayNexus signs the raw JSON body with HMAC-SHA256 and sends the hex digest
-// in X-PayNexus-Signature. crypto.subtle.verify does a constant-time
-// comparison internally, which is important here — comparing signatures with
-// a plain === would leak timing information.
-async function verifySignature(rawBody: string, signatureHex: string, secret: string): Promise<boolean> {
+// in X-PayNexus-Signature. Their own dashboard sample verification snippet
+// does `ltrim($signature, 'sha256=')` before comparing, which means the
+// header can arrive as either a bare hex digest OR prefixed with "sha256=" —
+// strip that prefix the same way so both shapes verify correctly.
+// crypto.subtle.verify does a constant-time comparison internally, which is
+// important here — comparing signatures with a plain === would leak timing
+// information.
+async function verifySignature(rawBody: string, signatureHeader: string, secret: string): Promise<boolean> {
+  const signatureHex = signatureHeader.trim().replace(/^sha256=/i, '')
   if (!/^[0-9a-f]+$/i.test(signatureHex) || signatureHex.length % 2 !== 0) return false
 
   const key = await crypto.subtle.importKey(
@@ -58,13 +63,19 @@ export default {
     const timestampHeader = req.headers.get('X-PayNexus-Timestamp')
     const rawBody = await req.text()
 
-    if (!signature || !timestampHeader) {
-      return Response.json({ received: false, message: 'Missing signature headers' }, { status: 401 })
+    if (!signature) {
+      return Response.json({ received: false, message: 'Missing signature header' }, { status: 401 })
     }
 
-    const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestampHeader))
-    if (!Number.isFinite(ageSeconds) || ageSeconds > MAX_TIMESTAMP_SKEW_SECONDS) {
-      return Response.json({ received: false, message: 'Stale webhook timestamp' }, { status: 401 })
+    // PayNexus's own "How to Verify Webhooks" instructions only reference
+    // X-PayNexus-Signature, not a timestamp header — so this check only
+    // fires when the header is actually present, rather than hard-rejecting
+    // every real webhook because PayNexus never sends one.
+    if (timestampHeader) {
+      const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestampHeader))
+      if (!Number.isFinite(ageSeconds) || ageSeconds > MAX_TIMESTAMP_SKEW_SECONDS) {
+        return Response.json({ received: false, message: 'Stale webhook timestamp' }, { status: 401 })
+      }
     }
 
     let validSignature = false
