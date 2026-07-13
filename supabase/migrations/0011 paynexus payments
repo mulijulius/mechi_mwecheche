@@ -10,6 +10,11 @@
 -- endpoint, so this migration — and the paynexus-deposit / paynexus-webhook
 -- Edge Functions that use it — only cover deposits. Withdrawals still need a
 -- separate mechanism; see chat notes.
+--
+-- IDEMPOTENCY NOTE: this file was previously run partway (the table got
+-- created but the script errored out before reaching the functions below),
+-- so every statement here is written to be safe to re-run against a database
+-- that already has some or all of these objects in place.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -18,7 +23,7 @@
 -- (type = 'deposit') created at the same time, so the two can never drift.
 -- ----------------------------------------------------------------------------
 
-create table public.paynexus_payments (
+create table if not exists public.paynexus_payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   transaction_id uuid not null references public.transactions (id) on delete cascade,
@@ -38,9 +43,10 @@ create table public.paynexus_payments (
 
 comment on table public.paynexus_payments is 'Lifecycle of M-Pesa STK Push deposits initiated via the PayNexus (paynexus.co.ke) API. One row per attempt, linked to a transactions row.';
 
-create index paynexus_payments_user_id_idx on public.paynexus_payments (user_id);
-create index paynexus_payments_status_idx on public.paynexus_payments (status);
+create index if not exists paynexus_payments_user_id_idx on public.paynexus_payments (user_id);
+create index if not exists paynexus_payments_status_idx on public.paynexus_payments (status);
 
+drop trigger if exists paynexus_payments_set_updated_at on public.paynexus_payments;
 create trigger paynexus_payments_set_updated_at
   before update on public.paynexus_payments
   for each row execute procedure public.set_updated_at();
@@ -56,6 +62,7 @@ create trigger paynexus_payments_set_updated_at
 
 alter table public.paynexus_payments enable row level security;
 
+drop policy if exists "Users can view their own paynexus payments" on public.paynexus_payments;
 create policy "Users can view their own paynexus payments"
   on public.paynexus_payments for select
   using (auth.uid() = user_id or public.is_admin());
@@ -67,7 +74,7 @@ create policy "Users can view their own paynexus payments"
 -- paynexus_payments row in one atomic statement.
 -- ----------------------------------------------------------------------------
 
-create function public.paynexus_create_pending_deposit(
+create or replace function public.paynexus_create_pending_deposit(
   p_user_id uuid,
   p_amount_cents bigint,
   p_phone text,
@@ -117,7 +124,7 @@ grant execute on function public.paynexus_create_pending_deposit(uuid, bigint, t
 -- deposit can never end up 'completed' without the balance being updated.
 -- ----------------------------------------------------------------------------
 
-create function public.paynexus_resolve_deposit(
+create or replace function public.paynexus_resolve_deposit(
   p_reference text,
   p_new_status public.transaction_status,
   p_mpesa_receipt text,
