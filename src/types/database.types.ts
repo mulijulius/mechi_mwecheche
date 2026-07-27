@@ -3,9 +3,9 @@
 // 0006_checkers_move_sync.sql, 0007_checkers_zero_stake_payout_fix.sql,
 // 0008_ludo_matchmaking.sql, and 0009_ludo_move_sync.sql.
 // Regenerate with: npx supabase gen types typescript --project-id <id> > src/types/database.types.ts
-// 0010_ludo_realtime_publication.sql and 0011_paynexus_payments.sql have been
-// folded in by hand below — re-run the command above to get an authoritative
-// version once you have a moment.
+// 0010_ludo_realtime_publication.sql, 0011_paynexus_payments.sql, and
+// 0012_paynexus_deposit_fees.sql have been folded in by hand below — re-run
+// the command above to get an authoritative version once you have a moment.
 
 // Standard Supabase-generated helper for jsonb columns. paynexus_payments is
 // the first table here with one (raw_webhook_payload).
@@ -301,6 +301,7 @@ export interface Database {
           type: TransactionType
           status: TransactionStatus
           amount_cents: number
+          fee_cents: number
           mpesa_receipt: string | null
           mpesa_phone: string | null
           created_at: string
@@ -312,6 +313,7 @@ export interface Database {
           type: TransactionType
           status?: TransactionStatus
           amount_cents: number
+          fee_cents?: number
           mpesa_receipt?: string | null
           mpesa_phone?: string | null
           created_at?: string
@@ -323,6 +325,7 @@ export interface Database {
           type?: TransactionType
           status?: TransactionStatus
           amount_cents?: number
+          fee_cents?: number
           mpesa_receipt?: string | null
           mpesa_phone?: string | null
           created_at?: string
@@ -576,6 +579,7 @@ export interface Database {
           transaction_id: string
           status: TransactionStatus
           amount_cents: number
+          fee_cents: number
           phone: string
           reference: string
           checkout_request_id: string | null
@@ -593,6 +597,7 @@ export interface Database {
           transaction_id: string
           status?: TransactionStatus
           amount_cents: number
+          fee_cents?: number
           phone: string
           reference: string
           checkout_request_id?: string | null
@@ -610,6 +615,7 @@ export interface Database {
           transaction_id?: string
           status?: TransactionStatus
           amount_cents?: number
+          fee_cents?: number
           phone?: string
           reference?: string
           checkout_request_id?: string | null
@@ -771,6 +777,11 @@ export interface Database {
           p_raw_payload: Json
         }
         Returns: string // 'ok' | 'not_found' | 'already_resolved' | 'invalid_status'
+      }
+      // ---- Added by 0012_paynexus_deposit_fees.sql --------------------------
+      paynexus_deposit_fee_cents: {
+        Args: { p_amount_cents: number }
+        Returns: number // tiered deposit charge, in cents
       }
     }
     Enums: {
