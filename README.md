@@ -23,14 +23,18 @@ The app runs at `http://localhost:3000`.
 
 ### Environment variables
 
-A `.env` file is already included with the Supabase credentials you provided:
+Copy `.env.example` to `.env` and fill in your own Supabase project's values:
+
+```bash
+cp .env.example .env
+```
 
 ```
-VITE_SUPABASE_URL=https://pgxvhwcztdvupqjphmcn.supabase.co
-VITE_SUPABASE_KEY=sb_publishable_838f0LDsqgSvI6RboHQD_g_u6LWkXaj
+VITE_SUPABASE_URL=your-project.supabase.co
+VITE_SUPABASE_KEY=your-publishable-key
 ```
 
-If you rotate keys or point this at a different Supabase project, update `.env` (see `.env.example` for the shape).
+Find these under Supabase Dashboard → Project Settings → API. `.env` is gitignored and should never be committed.
 
 ### Running the first migration
 
@@ -38,7 +42,7 @@ The schema this frontend expects lives in `supabase/migrations/0001_init.sql`. R
 
 ```bash
 npx supabase login
-npx supabase link --project-ref pgxvhwcztdvupqjphmcn
+npx supabase link --project-ref your-project-ref
 npx supabase db push
 ```
 
